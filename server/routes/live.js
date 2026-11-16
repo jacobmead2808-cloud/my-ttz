@@ -13,6 +13,7 @@ const liveRt = require('../realtime/live');
 const { serializeLive, liveList } = require('./discover');
 const automod = require('../lib/automod');
 const eco = require('../lib/economy');
+const accounts = require('../lib/accounts');
 const { eligibility } = require('../lib/liveRules');
 
 const GOAL_TYPES = ['likes', 'gifts', 'followers'];
@@ -56,10 +57,11 @@ router.get('/mine', requireAuth, (req, res) => {
   res.json({ activeId: s ? s.id : null, history: past.map((p) => serializeLive({ ...p, username: req.user.username, display_name: req.user.display_name, avatar_url: req.user.avatar_url })) });
 });
 
-router.post('/', requireAuth, startLimit, (req, res) => {
+router.post('/', requireAuth, accounts.requireVerified, startLimit, (req, res) => {
   const me = req.user;
   if (!liveRt.liveAllowed() && me.role !== 'admin') throw forbidden('LIVE is temporarily disabled by the platform owner');
   if (me.live_banned) throw forbidden('Your LIVE access has been restricted by a moderator');
+  accounts.requireAdult(me, 'go LIVE');
   automod.assertAllowed(String(req.body.title || ''), { user: me, context: 'caption' });
   const elig = eligibility(me);
   let isTrial = 0;
@@ -128,7 +130,8 @@ router.patch('/:id', requireAuth, (req, res) => {
 });
 
 const giftLimit = limit({ windowMs: 10000, max: 30, key: (req) => `gift:${req.user.id}` });
-router.post('/:id/gift', requireAuth, giftLimit, (req, res) => {
+router.post('/:id/gift', requireAuth, accounts.requireVerified, giftLimit, (req, res) => {
+  accounts.requireAdult(req.user, 'send gifts');
   const s = getStream(v.int(req.params.id, 'stream'));
   if (!s || s.status !== 'live' || !canWatch(req.user, s)) throw notFound('This LIVE has ended');
   const out = eco.sendGift({ senderId: req.user.id, receiverId: s.user_id, giftId: String(req.body.giftId || ''), count: req.body.count, streamId: s.id });

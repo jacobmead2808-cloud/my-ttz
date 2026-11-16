@@ -9,6 +9,10 @@ const fs = require('fs');
 const path = require('path');
 const config = require('./config');
 
+if (process.env.NODE_ENV === 'production') {
+  console.error('The demo seed is a development tool and never runs in production.');
+  process.exit(1);
+}
 const reset = process.argv.includes('--reset');
 if (reset) {
   for (const f of ['app.db', 'app.db-wal', 'app.db-shm']) fs.rmSync(path.join(config.dataDir, f), { force: true });

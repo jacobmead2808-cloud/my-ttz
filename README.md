@@ -11,12 +11,13 @@ Requires **Node.js 22.13+** (uses the built-in `node:sqlite`). Tested on Node 24
 
 ```bash
 npm install
-npm run seed        # admin + 10 demo users, 5 placeholder sounds, 12 demo videos
+npm run seed        # DEVELOPMENT ONLY: admin + 10 demo users, sounds, 12 demo videos (refuses to run in production)
 npm start           # http://localhost:4000
 ```
 
 * Admin login: `admin` / the `ADMIN_PASSWORD` value in `.env.example`
-* Demo logins: e.g. `maya.moves` / the `SEED_PASSWORD` value in `.env.example`
+* Demo logins (local only): e.g. `maya.moves` / your `SEED_PASSWORD`. Remove them with `npm run purge-demo -- --yes`.
+* Going online? Follow [DEPLOY.md](DEPLOY.md); the security/readiness review is in [AUDIT.md](AUDIT.md).
 * `npm run dev` restarts on file changes, `npm test` runs the end-to-end API tests,
   `npm run seed -- --reset` wipes and reseeds, `npm run make-admin -- <username>` promotes a user.
 
@@ -77,7 +78,7 @@ It warns at 30, opens a case for a human at 55, and auto-suspends for 24h at 85 
 Verified users, admins and the owner are never auto-actioned — they’re escalated. Staff are notified in real time and
 work cases in Moderation centre → Cases. Optional AI text classification: `AI_MODERATION=openai` + `OPENAI_API_KEY`.
 Every account has a moderation profile (`/admin/user/:id`) with content, behaviour, risk, reports, history, LIVE and
-wallet, plus all actions. **Verifying** an account is owner-only and requires the key in `VERIFY_KEY` (default `weluvjj`).
+wallet, plus all actions. **Verifying** an account is owner-only and requires the key in `VERIFY_KEY` (production has no default; set your own).
 
 ## Turning it into an app
 1. **Installable now (PWA):** deploy on HTTPS, open it on a phone → “Add to Home Screen” (or the browser’s Install
@@ -113,8 +114,8 @@ video/thumbnail files served only to users allowed to view them · every admin r
 * Name, tagline, logo paths: `public/js/brand.js` (and `APP_NAME` in `.env` for emails)
 * Colours: `--brand`, `--brand-2` at the top of `public/css/app.css`
 * Logo/favicon: `public/assets/brand/`, default avatar & thumbnail: `public/assets/`
-* Demo videos: Admin → **Demo content** generates more in the browser; `node server/scripts/export-seed-media.js`
-  saves the current videos into `server/seed/media` for future seeds. Delete that folder to seed without videos.
+* Demo videos (development only): `node server/scripts/export-seed-media.js` saves the current videos into
+  `server/seed/media` for future local seeds. That folder is never copied into the production image.
 
 ## Project layout
 ```
@@ -128,7 +129,7 @@ server/
 public/
   index.html  css/app.css
   js/app.js           shell, routes, session boot
-  js/lib/             api, router, store, ws, dom helpers, icons, WebRTC, demo media generator
+  js/lib/             api, router, store, ws, dom helpers, icons, WebRTC
   js/components/      feed, video player, comments, social widgets, LIVE room, UI primitives
   js/pages/           home, explore, search, tag, sound, video, profile, upload, inbox, messages, live*, settings, admin, auth
 test/api.test.js      end-to-end tests (auth, reset, uploads, feed, likes, comments, follows, DMs, WS, LIVE, search, blocks, admin)

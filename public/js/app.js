@@ -39,6 +39,11 @@ route('/login', page('auth'), { guest: true, shell: 'bare', mode: 'login' });
 route('/signup', page('auth'), { guest: true, shell: 'bare', mode: 'signup' });
 route('/forgot', page('auth'), { shell: 'bare', mode: 'forgot' });
 route('/reset', page('auth'), { shell: 'bare', mode: 'reset' });
+route('/verify-email', page('auth'), { shell: 'bare', mode: 'verify' });
+route('/terms', page('legal'), { mode: 'terms' });
+route('/privacy', page('legal'), { mode: 'privacy' });
+route('/guidelines', page('legal'), { mode: 'guidelines' });
+route('/safety', page('legal'), { mode: 'safety' });
 routeRegex(/^\/@([^/]+)\/?$/, ['username'], page('profile'), { key: 'profile' });
 routeRegex(/^.*$/, [], async () => ({ default: () => ({ el: emptyState({ iconName: 'alert', title: 'Page not found', text: "This page doesn't exist or was removed.", action: h('a.btn.btn-primary', { href: '/' }, 'Go home') }), title: 'Not found' }) }), { notFound: true });
 
@@ -117,6 +122,7 @@ function renderSidebar() {
   sidebar.append(h('div.side-footer',
     h('div.side-footer-links', h('a', { href: '/download' }, 'Get the app'), h('a', { href: '/explore' }, 'Explore'), h('a', { href: '/live' }, 'LIVE'), h('a', { href: me ? '/settings' : '/login' }, 'Settings'),
       h('button.link-btn', { onclick: cycleTheme }, icon(getTheme() === 'dark' ? 'moon' : 'sun', { size: 13 }), ` ${getTheme()[0].toUpperCase()}${getTheme().slice(1)} mode`)),
+    h('div.side-footer-links', h('a', { href: '/terms' }, 'Terms'), h('a', { href: '/privacy' }, 'Privacy'), h('a', { href: '/guidelines' }, 'Guidelines'), h('a', { href: '/safety' }, 'Safety')),
     h('p.muted.small', `© ${new Date().getFullYear()} ${BRAND.name}`)));
   markActive();
 }
@@ -218,6 +224,17 @@ function markActive() {
 const shell = h('div.app-shell', topbar, sidebar, view, tabbar);
 
 function renderAnnouncement() {
+  const me = store.me;
+  document.querySelector('.announce-bar')?.remove();
+  if (me && store.config.requireEmailVerification && !me.emailVerified) {
+    const btn = h('button.verify-resend', { type: 'button', onclick: async () => {
+      btn.disabled = true;
+      try { const r = await api.post('/auth/resend-verification', {}); toast(r.devNote || `Sent. Check ${me.email}.`, { type: 'success' }); } catch (e) { toast(e.message, { type: 'error' }); btn.disabled = false; }
+    } }, 'Resend link');
+    document.body.classList.add('has-announce');
+    document.getElementById('app').prepend(h('div.announce-bar.verify-bar', { role: 'status' }, icon('alert', { size: 16 }), h('span', `Confirm your email (${me.email}) to post, comment and message.`), btn));
+    return;
+  }
   const text = store.config.platform && store.config.platform.announcement;
   let dismissed = '';
   try { dismissed = localStorage.getItem('announceDismissed') || ''; } catch { /* ignore */ }
@@ -279,7 +296,7 @@ onUnauthorized(() => {
   }
 });
 
-on('me', () => { renderSidebar(); renderTopActions(); renderTabbar(); });
+on('me', () => { renderSidebar(); renderTopActions(); renderTabbar(); renderAnnouncement(); });
 
 // ---------- Boot ----------
 async function boot() {

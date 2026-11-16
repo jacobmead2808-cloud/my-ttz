@@ -36,7 +36,7 @@ function storiesOf(owner, viewer) {
     FROM stories s WHERE s.user_id = ? AND s.expires_at > ? ORDER BY s.created_at ASC`, viewer ? viewer.id : 0, owner.id, now());
 }
 
-router.post('/', requireAuth, storyLimit, storyUpload, (req, res) => {
+router.post('/', requireAuth, require('../lib/accounts').requireVerified, storyLimit, storyUpload, (req, res) => {
   const file = req.file;
   try {
     if (!file) throw bad('Choose a photo or video');

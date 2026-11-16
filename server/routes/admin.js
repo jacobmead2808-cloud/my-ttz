@@ -16,7 +16,7 @@ const automod = require('../lib/automod');
 const aiMod = require('../lib/aiMod');
 const eco = require('../lib/economy');
 const { eligibility } = require('../lib/liveRules');
-const VERIFY_KEY = () => process.env.VERIFY_KEY || 'weluvjj';
+const VERIFY_KEY = () => process.env.VERIFY_KEY || (config.isProd ? null : 'weluvjj');
 
 const router = express.Router();
 router.use(requireAdmin); // every admin route is protected server-side
@@ -149,7 +149,8 @@ router.post('/users/:id/flags', (req, res) => {
   if (!u) throw notFound('User not found');
   if (req.body.verified !== undefined) {
     if (!req.user.is_owner) throw forbidden('Only the platform owner can give or remove verified badges');
-    if (String(req.body.key || '') !== VERIFY_KEY()) throw forbidden('Wrong verification key');
+    if (!VERIFY_KEY()) throw forbidden('VERIFY_KEY is not set on the server');
+  if (String(req.body.key || '') !== VERIFY_KEY()) throw forbidden('Wrong verification key');
     const on = v.bool(req.body.verified);
     q.run('UPDATE users SET is_verified = ? WHERE id = ?', on ? 1 : 0, u.id);
     if (on) notify({ userId: u.id, actorId: null, type: 'verified', body: 'Your account is now verified' });
@@ -159,6 +160,7 @@ router.post('/users/:id/flags', (req, res) => {
     q.run('UPDATE users SET comment_banned = ? WHERE id = ?', v.bool(req.body.commentBanned) ? 1 : 0, u.id);
   }
   if (req.body.liveBanned !== undefined) {
+    if (u.is_owner || (u.role === 'admin' && !req.user.is_owner)) throw forbidden('You cannot restrict this account');
     const on = v.bool(req.body.liveBanned);
     q.run('UPDATE users SET live_banned = ? WHERE id = ?', on ? 1 : 0, u.id);
     if (on) for (const s of q.all("SELECT id FROM live_streams WHERE user_id = ? AND status = 'live'", u.id)) liveRt.endStream(s.id, 'live_restricted');
@@ -263,6 +265,7 @@ router.post('/users/:id/assess', async (req, res) => {
 
 router.post('/users/:id/verify', (req, res) => {
   if (!req.user.is_owner) throw forbidden('Only the platform owner can give or remove verified badges');
+  if (!VERIFY_KEY()) throw forbidden('VERIFY_KEY is not set on the server');
   if (String(req.body.key || '') !== VERIFY_KEY()) throw forbidden('Wrong verification key');
   const u = q.get('SELECT * FROM users WHERE id = ?', v.int(req.params.id, 'user'));
   if (!u) throw notFound('User not found');
@@ -528,44 +531,6 @@ router.delete('/videos/:id', (req, res) => {
   removeStored(config.dirs.thumbs, row.thumb_file);
   audit(req, 'video.delete', 'video', row.id, row.caption.slice(0, 100));
   res.json({ ok: true });
-});
-
-/** Upload generated demo content on behalf of a (random or given) non-admin user. */
-router.post('/demo-videos', videoUpload, (req, res) => {
-  const files = req.files || {};
-  const videoFile = files.video && files.video[0];
-  const thumbFile = files.thumbnail && files.thumbnail[0];
-  try {
-    if (!videoFile) throw bad('Missing video');
-    const owner = req.body.username
-      ? q.get('SELECT * FROM users WHERE username = ?', String(req.body.username).toLowerCase())
-      : q.get("SELECT * FROM users WHERE role = 'user' AND status = 'active' AND is_private = 0 ORDER BY RANDOM() LIMIT 1");
-    if (!owner) throw bad('No demo users exist. Run `npm run seed` first.');
-    const caption = v.str(req.body.caption, { name: 'Caption', max: 300 });
-    const soundId = req.body.soundId && q.get('SELECT id FROM sounds WHERE id = ?', Number(req.body.soundId)) ? Number(req.body.soundId) : null;
-    const vid = store(videoFile, 'video', config.dirs.videos);
-    const thumb = thumbFile ? store(thumbFile, 'image', config.dirs.thumbs) : null;
-    const t = now() - Math.floor(Math.random() * 5 * DAY);
-    const id = tx(() => {
-      const r = q.run(`INSERT INTO videos (user_id, caption, video_file, video_mime, thumb_file, sound_id, duration, width, height, views, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, owner.id, caption, vid.name, vid.mime, thumb ? thumb.name : null, soundId,
-      Number(req.body.duration) || 0, Number(req.body.width) || null, Number(req.body.height) || null, Math.floor(Math.random() * 5000), t, t);
-      const newId = Number(r.lastInsertRowid);
-      for (const tag of v.extractHashtags(caption)) {
-        q.run('INSERT OR IGNORE INTO hashtags (tag) VALUES (?)', tag);
-        q.run('INSERT OR IGNORE INTO video_hashtags (video_id, hashtag_id) SELECT ?, id FROM hashtags WHERE tag = ?', newId, tag);
-      }
-      // sprinkle some likes from other demo users
-      const likers = q.all("SELECT id FROM users WHERE id <> ? AND role = 'user' ORDER BY RANDOM() LIMIT ?", owner.id, Math.floor(Math.random() * 8));
-      for (const l of likers) q.run('INSERT OR IGNORE INTO likes (user_id, video_id, created_at) VALUES (?, ?, ?)', l.id, newId, t + 1000);
-      return newId;
-    });
-    audit(req, 'demo.upload', 'video', id, owner.username);
-    res.status(201).json({ video: serializeVideo(getVideoRow(id, req.user.id), req.user), file: vid.name, thumb: thumb ? thumb.name : null });
-  } catch (e) {
-    discard(videoFile, thumbFile);
-    throw e;
-  }
 });
 
 // ---------- Comments ----------

@@ -76,6 +76,14 @@ export default function authPage(ctx) {
     const username = input('username', 'text', 'Username', { autocomplete: 'username', minlength: 2, maxlength: 24, pattern: '[A-Za-z0-9_][A-Za-z0-9_.]*' });
     const display = input('displayName', 'text', 'Display name (optional)', { required: false, maxlength: 40 });
     const pw = pwInput('password', 'Password', 'new-password');
+    const today = new Date().toISOString().slice(0, 10);
+    const dob = h('input.input', { name: 'birthDate', type: 'date', required: true, max: today, min: '1900-01-01', 'aria-label': 'Date of birth', autocomplete: 'bday' });
+    const dobField = h('label.field-inline', h('span.small.muted', 'Date of birth (not shown publicly)'), dob);
+    const terms = h('input', { type: 'checkbox', name: 'acceptTerms', required: true, 'aria-label': 'I agree to the Terms of Service and Community Guidelines' });
+    const termsRow = h('label.check-row', terms, h('span.small', 'I agree to the ',
+      h('a.link', { href: '/terms', target: '_blank' }, 'Terms of Service'), ' and ',
+      h('a.link', { href: '/guidelines', target: '_blank' }, 'Community Guidelines'), ', and I have read the ',
+      h('a.link', { href: '/privacy', target: '_blank' }, 'Privacy Policy'), '.'));
     const pwHint = h('ul.pw-rules',
       h('li', { dataset: { rule: 'len' } }, '8+ characters'), h('li', { dataset: { rule: 'letter' } }, 'A letter'), h('li', { dataset: { rule: 'num' } }, 'A number'));
     pw.input.addEventListener('input', () => {
@@ -92,13 +100,13 @@ export default function authPage(ctx) {
         showErr(err, '');
         btn.disabled = true;
         try {
-          const r = await api.post('/auth/register', { email: email.value, username: username.value, displayName: display.value, password: pw.input.value });
-          toast(`Welcome to ${BRAND.name}, @${r.user.username}!`, { type: 'success' });
+          const r = await api.post('/auth/register', { email: email.value, username: username.value, displayName: display.value, password: pw.input.value, birthDate: dob.value, acceptTerms: terms.checked });
+          toast(r.user.emailVerified ? `Welcome to ${BRAND.name}, @${r.user.username}!` : `Welcome, @${r.user.username}! Check your email to confirm your address.`, { type: 'success' });
           afterLogin(r.user, next);
         } catch (ex) { showErr(err, ex.message); btn.disabled = false; }
       },
-    }, err, email, username, display, pw, pwHint, btn,
-    h('p.muted.small', 'By continuing, you agree to the Terms of Service and confirm that you have read the Privacy Policy.'));
+    }, err, email, username, display, pw, pwHint, dobField, termsRow, btn,
+    h('p.muted.small', `You must be 13 or older to use ${BRAND.name}. Accounts under 18 start private and can't go LIVE or buy coins.`));
     return { title: 'Sign up', el: shell(`Sign up for ${BRAND.name}`, 'Create a profile, follow other accounts, make your own videos, and more.', form, ['Already have an account? ', h('a.link', { href: `/login${q}` }, 'Log in')]) };
   }
 
@@ -120,6 +128,23 @@ export default function authPage(ctx) {
       },
     }, err, done, email, btn);
     return { title: 'Reset password', el: shell('Reset password', "Enter your account's email and we'll send you a link to reset your password.", form, [h('a.link', { href: '/login' }, 'Back to log in')]) };
+  }
+
+  if (ctx.mode === 'verify') {
+    const token = ctx.query.get('token') || '';
+    const status = h('div.stack', h('p.muted', 'Confirming your email...'));
+    (async () => {
+      try {
+        if (!token) throw new Error('This link is missing its token. Request a new one from the banner at the top of the app.');
+        await api.post('/auth/verify-email', { token });
+        try { const r = await api.get('/auth/me'); if (r.user) { const { setMe } = await import('../lib/store.js'); setMe(r.user); } } catch { /* signed out */ }
+        status.replaceChildren(h('div.form-success', h('p', 'Your email is confirmed. You can now post, comment and message.')),
+          h('a.btn.btn-primary.btn-block.btn-lg', { href: '/' }, `Go to ${BRAND.name}`));
+      } catch (ex) {
+        status.replaceChildren(h('div.form-error', { role: 'alert' }, ex.message), h('a.btn.btn-secondary.btn-block', { href: '/' }, 'Back to home'));
+      }
+    })();
+    return { title: 'Confirm email', el: shell('Confirm your email', null, status, null) };
   }
 
   // reset

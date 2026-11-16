@@ -9,7 +9,7 @@
 const crypto = require('crypto');
 const express = require('express');
 const config = require('../config');
-const { q, now } = require('../db');
+const { q, tx, now } = require('../db');
 const v = require('../lib/validate');
 const { bad, notFound, HttpError } = require('../lib/errors');
 const { requireAuth } = require('../lib/auth');
@@ -22,9 +22,10 @@ const hub = require('../realtime/hub');
 const router = express.Router();
 const buyLimit = limit({ windowMs: 60 * 60 * 1000, max: 30, key: (req) => `buy:${req.user.id}` });
 
+/** 'stripe' = real payments; 'demo' = free test coins (development only, never in production); 'disabled'. */
 function paymentMode() {
   if (process.env.STRIPE_SECRET_KEY) return 'stripe';
-  if (process.env.COINS_DEMO_MODE === 'false' || (config.isProd && process.env.COINS_DEMO_MODE !== 'true')) return 'disabled';
+  if (config.isProd || process.env.COINS_DEMO_MODE === 'false') return 'disabled';
   return 'demo';
 }
 
@@ -46,15 +47,19 @@ router.get('/transactions', requireAuth, (req, res) => {
   res.json({ wallet: eco.wallet(req.user.id), transactions: rows.map((t) => ({ id: t.id, type: t.type, coins: t.coins, diamonds: t.diamonds, ref: t.ref, note: t.note, createdAt: t.created_at })) });
 });
 
+/** Mark an order paid and add its coins — exactly once, even if Stripe retries the webhook. */
 function credit(order) {
-  if (order.status === 'paid') return;
-  q.run("UPDATE coin_orders SET status = 'paid', paid_at = ? WHERE id = ? AND status <> 'paid'", now(), order.id);
-  const w = eco.adjust(order.user_id, { coins: order.coins, type: 'purchase', ref: `order:${order.id}`, note: order.provider === 'demo' ? 'Demo purchase (no real money)' : null });
-  hub.sendToUser(order.user_id, { type: 'wallet', wallet: w });
-  return w;
+  const w = tx(() => {
+    const r = q.run("UPDATE coin_orders SET status = 'paid', paid_at = ? WHERE id = ? AND status <> 'paid'", now(), order.id);
+    if (r.changes !== 1) return null; // already credited
+    return eco.adjust(order.user_id, { coins: order.coins, type: 'purchase', ref: `order:${order.id}`, note: order.provider === 'demo' ? 'Demo purchase (no real money)' : null });
+  });
+  if (w) hub.sendToUser(order.user_id, { type: 'wallet', wallet: w });
+  return w || eco.wallet(order.user_id);
 }
 
-router.post('/checkout', requireAuth, buyLimit, async (req, res) => {
+router.post('/checkout', requireAuth, require('../lib/accounts').requireVerified, buyLimit, async (req, res) => {
+  require('../lib/accounts').requireAdult(req.user, 'buy coins');
   const coins = v.int(req.body.coins, 'coin amount');
   if (coins < 30 || coins > 250000) throw bad('Choose between 30 and 250,000 coins');
   const pkg = eco.packages().find((p) => p.coins === coins);
@@ -104,8 +109,10 @@ router.get('/orders/:id', requireAuth, (req, res) => {
 /** Turn LIVE rewards (diamonds) into coins, 1:1. */
 router.post('/exchange', requireAuth, (req, res) => {
   const diamonds = v.int(req.body.diamonds, 'diamond amount');
-  eco.adjust(req.user.id, { diamonds: -diamonds, type: 'exchange', note: 'Diamonds → coins' });
-  const wallet = eco.adjust(req.user.id, { coins: diamonds, type: 'exchange', note: 'Diamonds → coins' });
+  const wallet = tx(() => {
+    eco.adjust(req.user.id, { diamonds: -diamonds, type: 'exchange', note: 'Diamonds → coins' });
+    return eco.adjust(req.user.id, { coins: diamonds, type: 'exchange', note: 'Diamonds → coins' });
+  });
   res.json({ wallet });
 });
 

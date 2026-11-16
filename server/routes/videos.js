@@ -5,6 +5,7 @@ const { q, tx, now } = require('../db');
 const v = require('../lib/validate');
 const { bad, notFound, forbidden } = require('../lib/errors');
 const { requireAuth } = require('../lib/auth');
+const { requireVerified } = require('../lib/accounts');
 const { limit } = require('../lib/rateLimit');
 const access = require('../lib/access');
 const { videoUpload, store, discard, removeStored, imageUpload } = require('../lib/uploads');
@@ -155,7 +156,7 @@ function parseSchedule(b) {
   return at;
 }
 
-router.post('/', requireAuth, uploadsOpen, uploadLimit, videoUpload, (req, res) => {
+router.post('/', requireAuth, requireVerified, uploadsOpen, uploadLimit, videoUpload, (req, res) => {
   const files = req.files || {};
   const videoFile = files.video && files.video[0];
   const thumbFile = files.thumbnail && files.thumbnail[0];
@@ -430,7 +431,7 @@ router.get('/comments/:cid/replies', (req, res) => {
 
 const commentLimit = limit({ windowMs: 60 * 1000, max: 20, key: (req) => `cm:${req.user.id}`, message: 'You are commenting too fast' });
 
-router.post('/:id/comments', requireAuth, commentLimit, (req, res) => {
+router.post('/:id/comments', requireAuth, requireVerified, commentLimit, (req, res) => {
   const row = visibleVideo(req);
   if (!access.canComment(req.user, row)) throw forbidden('Comments are turned off or restricted for this video');
   const body = v.str(req.body.body, { name: 'Comment', required: true, max: 500 });

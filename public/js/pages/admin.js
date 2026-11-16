@@ -1,4 +1,4 @@
-// Admin dashboard: stats, reports queue, user/video/comment moderation, LIVE control, audit log, demo content.
+// Admin dashboard: stats, reports queue, user/video/comment moderation, LIVE control, audit log.
 // Every action here is enforced server-side by requireAdmin; the UI only mirrors it.
 import { h } from '../lib/dom.js';
 import { icon } from '../lib/icons.js';
@@ -7,7 +7,6 @@ import { fmtCount, timeAgo, fullDate } from '../lib/format.js';
 import { BRAND } from '../brand.js';
 import { toast, toastError, confirmDialog, promptDialog, tabs, loadingBlock, errorState, emptyState, avatar, actionSheet } from '../components/ui.js';
 import { store } from '../lib/store.js';
-import { generateDemoVideos } from '../lib/demoMedia.js';
 import { coinIcon, money } from '../components/coins.js';
 
 export function riskMeter(score) {
@@ -226,25 +225,7 @@ export default function adminPage(ctx) {
       h('td.small', fullDate(e.createdAt)), h('td', `@${e.admin || '?'}`), h('td', h('code', e.action)), h('td', e.targetType ? `${e.targetType} #${e.targetId}` : ''), h('td.small', e.note || '')))) : emptyState({ iconName: 'shield', title: 'No admin actions yet' });
   }
 
-  function demo() {
-    const count = h('input.input.input-sm', { type: 'number', min: 1, max: 20, value: 8 });
-    const log = h('div.demo-log');
-    const preview = h('div.demo-preview');
-    const btn = h('button.btn.btn-primary', { onclick: async () => {
-      btn.disabled = true;
-      log.replaceChildren();
-      try {
-        const n = await generateDemoVideos(Math.min(20, Math.max(1, Number(count.value) || 8)), {
-          onLog: (m) => { log.appendChild(h('div.small', m)); log.scrollTop = log.scrollHeight; },
-          previewEl: preview,
-        });
-        toast(`Generated ${n} demo videos`, { type: 'success' });
-      } catch (e) { toastError(e); } finally { btn.disabled = false; }
-    } }, icon('sparkles', { size: 16 }), ' Generate');
-    return h('section.settings-card', h('h2', 'Demo content'),
-      h('p.muted', 'Creates placeholder videos in your browser (animated canvas recorded with MediaRecorder) and uploads them to random demo accounts with captions, hashtags and placeholder sounds. Useful for trying the feed before real users upload. Replace or delete them any time.'),
-      h('div.row.gap', h('label.row.gap-sm', 'How many', count), btn), preview, log);
-  }
+
 
   // ---------- Auto-moderation ----------
   async function automodView() {
@@ -346,7 +327,7 @@ export default function adminPage(ctx) {
         } }, icon('send', { size: 16 }), ' Send announcement'))));
   }
 
-  const views = { overview, cases, reports: () => reports(), users, videos, comments, live, automod: automodView, economy: economyView, platform: platformView, audit, demo };
+  const views = { overview, cases, reports: () => reports(), users, videos, comments, live, automod: automodView, economy: economyView, platform: platformView, audit };
   async function show(k) {
     tab = k;
     history.replaceState({}, '', `/admin?tab=${k}`);
@@ -358,7 +339,7 @@ export default function adminPage(ctx) {
     { value: 'overview', label: 'Overview', icon: 'chart' }, { value: 'cases', label: 'Cases', icon: 'shield' }, { value: 'reports', label: 'Reports', icon: 'flag' }, { value: 'users', label: 'Users', icon: 'users' },
     { value: 'videos', label: 'Videos', icon: 'film' }, { value: 'comments', label: 'Comments', icon: 'comment' }, { value: 'live', label: 'LIVE', icon: 'live' },
     { value: 'automod', label: 'Auto-mod', icon: 'alert' }, { value: 'economy', label: 'Coins & gifts', icon: 'sparkles' }, { value: 'platform', label: store.me.isOwner ? 'Owner' : 'Platform', icon: 'settings' },
-    { value: 'audit', label: 'Audit log', icon: 'eye' }, { value: 'demo', label: 'Demo content', icon: 'sparkles' },
+    { value: 'audit', label: 'Audit log', icon: 'eye' },
   ], tab, show, 'scroll-tabs');
   show(views[tab] ? tab : 'overview');
   return { el: h('div.admin-page', h('h1.page-title', icon('shield', { size: 28 }), ' Moderation centre'), bar, body), title: 'Admin' };

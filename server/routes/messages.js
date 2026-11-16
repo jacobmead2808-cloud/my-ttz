@@ -12,6 +12,7 @@ const automod = require('../lib/automod');
 
 const router = express.Router();
 router.use(requireAuth);
+const { requireVerified } = require('../lib/accounts');
 const sendLimit = limit({ windowMs: 60 * 1000, max: 40, key: (req) => `dm:${req.user.id}`, message: 'You are sending messages too quickly' });
 
 function getConversation(req) {
@@ -60,7 +61,7 @@ router.get('/', (req, res) => {
 });
 
 /** Open (or create) a conversation with a user. */
-router.post('/', (req, res) => {
+router.post('/', requireVerified, (req, res) => {
   const other = q.get('SELECT * FROM users WHERE username = ?', v.username(req.body.username, { allowReserved: true }));
   if (!other) throw notFound('User not found');
   const existing = q.get('SELECT * FROM conversations WHERE user_a = ? AND user_b = ?', Math.min(req.user.id, other.id), Math.max(req.user.id, other.id));
@@ -91,7 +92,7 @@ router.get('/:id/messages', (req, res) => {
   res.json({ messages: rows.reverse().map((m) => serializeMessage(m, req.user)), hasMore: rows.length === 50 });
 });
 
-router.post('/:id/messages', sendLimit, (req, res) => {
+router.post('/:id/messages', requireVerified, sendLimit, (req, res) => {
   const c = getConversation(req);
   const other = q.get('SELECT * FROM users WHERE id = ?', c.otherId);
   const check = access.canMessage(req.user, other);

@@ -11,6 +11,7 @@ const { unreadCount } = require('../lib/notify');
 const { meJson } = require('./me');
 const settings = require('../lib/settings');
 const automod = require('../lib/automod');
+const accounts = require('../lib/accounts');
 
 const router = express.Router();
 
@@ -24,15 +25,23 @@ router.post('/register', registerLimit, async (req, res) => {
   const username = v.username(req.body.username);
   const password = v.password(req.body.password);
   const displayName = v.str(req.body.displayName, { name: 'Display name', max: 40 }) || username;
+  const birthDate = accounts.parseBirthDate(req.body.birthDate);
+  const age = accounts.ageOn(birthDate);
+  if (age < accounts.MIN_AGE) throw bad(`You must be at least ${accounts.MIN_AGE} years old to use ${config.appName}.`);
+  if (!v.bool(req.body.acceptTerms)) throw bad('Please accept the Terms of Service and Community Guidelines to continue.');
+  const teen = age < accounts.ADULT_AGE;
   const cfg = settings.get('automod');
   if (cfg.enabled && automod.findWord(`${username.replace(/[._]/g, ' ')} ${displayName}`, cfg.blockedWords)) throw bad('That username or name is not allowed.');
   if (q.get('SELECT 1 FROM users WHERE email = ?', email)) throw conflict('An account with this email already exists');
   if (q.get('SELECT 1 FROM users WHERE username = ?', username)) throw conflict('That username is taken');
   const hash = await auth.hashPassword(password);
-  const r = q.run('INSERT INTO users (username, email, password_hash, display_name, created_at) VALUES (?, ?, ?, ?, ?)',
-    username, email, hash, displayName, now());
+  // Teens start private, with DMs limited to friends (people who follow each other).
+  const r = q.run(`INSERT INTO users (username, email, password_hash, display_name, birth_date, terms_accepted_at, email_verified, is_private, allow_messages, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, username, email, hash, displayName, birthDate, now(), config.requireEmailVerification ? 0 : 1,
+  teen ? 1 : 0, teen ? 'friends' : 'everyone', now());
   auth.createSession(res, Number(r.lastInsertRowid), req.get('user-agent'));
   const user = q.get('SELECT * FROM users WHERE id = ?', r.lastInsertRowid);
+  if (config.requireEmailVerification) await accounts.sendVerification(user);
   res.status(201).json({ user: meJson(user) });
 });
 
@@ -45,7 +54,9 @@ function statusMessage(u) {
   return null;
 }
 
-router.post('/login', loginLimit, async (req, res) => {
+const accountLimit = limit({ windowMs: 15 * 60 * 1000, max: 10, key: (req) => `acct:${String(req.body.login || '').toLowerCase().slice(0, 254)}`, message: 'Too many attempts for this account. Try again in 15 minutes or reset your password.' });
+
+router.post('/login', loginLimit, accountLimit, async (req, res) => {
   const login = v.str(req.body.login, { name: 'Email or username', required: true, max: 254 }).toLowerCase();
   const password = typeof req.body.password === 'string' ? req.body.password : '';
   if (!password) throw bad('Password is required');
@@ -60,6 +71,18 @@ router.post('/login', loginLimit, async (req, res) => {
   res.json({ user: meJson(user) });
 });
 
+router.post('/verify-email', resetLimit, (req, res) => {
+  const u = accounts.confirmVerification(v.str(req.body.token, { name: 'Token', required: true, max: 200 }));
+  res.json({ ok: true, username: u.username });
+});
+
+const resendLimit = limit({ windowMs: 60 * 60 * 1000, max: 5, key: (req) => `verify:${req.user ? req.user.id : req.ip}`, message: 'Too many emails sent. Try again in an hour.' });
+router.post('/resend-verification', auth.requireAuth, resendLimit, async (req, res) => {
+  if (req.user.email_verified) return res.json({ ok: true, alreadyVerified: true });
+  const r = await accounts.sendVerification(req.user);
+  res.json({ ok: true, delivered: !!r.delivered, devNote: !config.isProd && !r.delivered ? 'Dev mode: the link is in the server console and data/outbox/.' : null });
+});
+
 router.post('/logout', (req, res) => {
   auth.destroySession(req, res);
   res.json({ ok: true });
@@ -72,7 +95,7 @@ router.get('/me', (req, res) => {
   res.json({
     user: meJson(req.user),
     unread: { notifications: unreadCount(req.user.id), messages: unreadMessages, cases: req.user.role === 'admin' ? q.get("SELECT COUNT(*) AS n FROM mod_cases WHERE status = 'open'").n : 0 },
-    config: { appName: config.appName, iceServers: config.iceServers, platform: settings.get('platform') },
+    config: { appName: config.appName, iceServers: config.iceServers, platform: settings.get('platform'), requireEmailVerification: config.requireEmailVerification, contactEmail: config.contactEmail },
   });
 });
 

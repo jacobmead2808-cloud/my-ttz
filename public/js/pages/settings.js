@@ -45,7 +45,15 @@ export default function settingsPage(ctx) {
       body.replaceChildren(
         card('Profile', h('div.setting-row', h('div.row.gap', avatar(me, 56, { link: false }), h('div', h('b', me.displayName), h('div.muted', `@${me.username}`))),
           h('button.btn.btn-secondary', { onclick: () => editProfileModal(() => show('account')) }, 'Edit profile'))),
-        card('Email address', h('form.stack', {
+        me.birthDateSet ? null : card('Date of birth', h('p.muted.small', 'Needed for LIVE, coins and gifts (18+). It is never shown on your profile and can only be set once.'),
+          h('form.row.gap', {
+            onsubmit: async (e) => {
+              e.preventDefault();
+              const val = e.target.elements.dob.value;
+              try { await api.patch('/me/settings', { birthDate: val }); const r = await api.get('/auth/me'); setMe(r.user); toast('Saved', { type: 'success' }); show('account'); } catch (err) { toastError(err); }
+            },
+          }, h('input.input', { type: 'date', name: 'dob', required: true, max: new Date().toISOString().slice(0, 10), min: '1900-01-01' }), h('button.btn.btn-primary', { type: 'submit' }, 'Save'))),
+        card('Email address', me.emailVerified ? null : h('p.small.warn-text', 'Not confirmed yet. Use the link we emailed you, or the Resend button at the top of the page.'), h('form.stack', {
           onsubmit: async (e) => {
             e.preventDefault();
             try { const r = await api.post('/me/email', { email: email.value, password: pw.value }); setMe(r.user); pw.value = ''; toast('Email updated', { type: 'success' }); } catch (err) { toastError(err); }

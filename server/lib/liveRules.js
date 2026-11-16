@@ -38,17 +38,20 @@ function eligibility(user) {
       detail: `${r.goodStandingDays}+ day old account, ${r.goodStandingMinVideos}+ videos, ${r.goodStandingMinFollowers}+ followers, no warnings in 30 days` },
   ];
   let via = null;
+  const adult = require('./accounts').isAdult(user);
   if (user.role === 'admin') via = 'staff';
   else if (granted) via = 'granted';
   else if (checks[0].met) via = 'followers';
   else if (checks[1].met) via = 'verified';
   else if (checks[2].met) via = 'standing';
-  if (user.live_banned) via = null;
+  if (user.live_banned || adult === false) via = null;
 
   const lastTrial = q.get('SELECT MAX(started_at) AS t FROM live_streams WHERE user_id = ? AND is_trial = 1', user.id).t;
   const nextTrialAt = lastTrial ? lastTrial + r.trialEveryDays * DAY : 0;
   let trialReason = null;
   if (user.live_banned) trialReason = 'Your LIVE access is restricted';
+  else if (adult === false) trialReason = 'You must be 18 or older to go LIVE';
+  else if (adult === null) trialReason = 'Add your date of birth in Settings → Account first';
   else if (recentStrikes) trialReason = 'Trials need a clean record for 30 days';
   else if (risk > r.trialMaxRisk) trialReason = 'Your account is under review';
   else if (ageDays < 1) trialReason = 'Your account must be at least 1 day old';
@@ -57,6 +60,7 @@ function eligibility(user) {
     eligible: !!via,
     via,
     banned: !!user.live_banned,
+    adult,
     checks,
     trial: { available: !via && !trialReason, minutes: r.trialMinutes, nextAt: nextTrialAt > now() ? nextTrialAt : null, reason: trialReason },
   };

@@ -38,6 +38,9 @@ module.exports = {
   baseUrl,
   secureCookies: baseUrl.startsWith('https://'),
   trustProxy: env.TRUST_PROXY === '1' || env.TRUST_PROXY === 'true',
+  // Email verification: required in production unless explicitly turned off; opt-in in development.
+  contactEmail: env.CONTACT_EMAIL || '',
+  requireEmailVerification: env.REQUIRE_EMAIL_VERIFICATION === 'true' || (env.NODE_ENV === 'production' && env.REQUIRE_EMAIL_VERIFICATION !== 'false'),
   dataDir,
   dbFile: path.join(dataDir, 'app.db'),
   outboxDir: path.join(dataDir, 'outbox'),

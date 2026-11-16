@@ -9,6 +9,7 @@ const { imageUpload, store, removeStored, discard } = require('../lib/uploads');
 const { notify } = require('../lib/notify');
 const { userBrief } = require('../lib/serialize');
 const automod = require('../lib/automod');
+const accounts = require('../lib/accounts');
 
 const router = express.Router();
 
@@ -28,6 +29,9 @@ function meJson(u) {
     isOwner: !!u.is_owner,
     verified: !!u.is_verified,
     commentBanned: !!u.comment_banned,
+    emailVerified: !!u.email_verified,
+    birthDateSet: !!u.birth_date,
+    isAdult: accounts.isAdult(u),
     liveBanned: !!u.live_banned,
     settings: {
       isPrivate: !!u.is_private,
@@ -85,6 +89,16 @@ router.patch('/settings', (req, res) => {
   if (b.allowMessages !== undefined) sets.allow_messages = v.oneOf(b.allowMessages, ['everyone', 'friends', 'none'], 'Messages setting');
   if (b.allowComments !== undefined) sets.allow_comments = v.oneOf(b.allowComments, ['everyone', 'followers', 'none'], 'Comments setting');
   if (b.showLiked !== undefined) sets.show_liked = v.bool(b.showLiked) ? 1 : 0;
+  if (b.birthDate !== undefined) {
+    if (u.birth_date) throw bad('Your date of birth is already set. Contact support to change it.');
+    sets.birth_date = accounts.parseBirthDate(b.birthDate);
+    const age = accounts.ageOn(sets.birth_date);
+    if (age < accounts.MIN_AGE) throw bad(`You must be at least ${accounts.MIN_AGE} to use this app.`);
+    if (age < accounts.ADULT_AGE) { sets.is_private = 1; if (u.allow_messages === 'everyone') sets.allow_messages = 'friends'; }
+  }
+  const effectiveBirth = sets.birth_date || u.birth_date;
+  if (sets.allow_messages === 'everyone' && effectiveBirth && accounts.ageOn(effectiveBirth) < accounts.ADULT_AGE)
+    throw bad('Accounts under 18 can only receive messages from friends.');
   if (b.filterLinks !== undefined) sets.filter_links = v.bool(b.filterLinks) ? 1 : 0;
   if (b.filterKeywords !== undefined) {
     if (!Array.isArray(b.filterKeywords)) throw bad('Keywords must be a list');
@@ -120,8 +134,10 @@ router.post('/email', async (req, res) => {
   if (!ok) throw unauthorized('Password is incorrect');
   const email = v.email(req.body.email);
   if (q.get('SELECT 1 FROM users WHERE email = ? AND id <> ?', email, req.user.id)) throw conflict('That email is already in use');
-  q.run('UPDATE users SET email = ? WHERE id = ?', email, req.user.id);
-  res.json({ user: meJson(q.get('SELECT * FROM users WHERE id = ?', req.user.id)) });
+  q.run('UPDATE users SET email = ?, email_verified = ? WHERE id = ?', email, config.requireEmailVerification ? 0 : 1, req.user.id);
+  const updated = q.get('SELECT * FROM users WHERE id = ?', req.user.id);
+  if (config.requireEmailVerification) await accounts.sendVerification(updated);
+  res.json({ user: meJson(updated) });
 });
 
 router.post('/logout-all', (req, res) => {
@@ -138,10 +154,13 @@ router.get('/sessions', (req, res) => {
 router.delete('/', async (req, res) => {
   const ok = await auth.verifyPassword(String(req.body.password || ''), req.user.password_hash);
   if (!ok) throw unauthorized('Password is incorrect');
+  if (req.user.is_owner) throw bad('The platform owner account can’t be deleted. Make another admin the owner first.');
   if (req.user.role === 'admin' && q.get("SELECT COUNT(*) AS n FROM users WHERE role = 'admin'").n <= 1)
     throw bad('You are the only administrator. Promote someone else before deleting your account.');
   const videos = q.all('SELECT video_file, thumb_file FROM videos WHERE user_id = ?', req.user.id);
   const avatar = req.user.avatar_url;
+  const stories = q.all('SELECT media_file FROM stories WHERE user_id = ?', req.user.id);
+  const previews = q.all('SELECT preview_file FROM live_streams WHERE user_id = ? AND preview_file IS NOT NULL', req.user.id);
   tx(() => {
     q.run('DELETE FROM notifications WHERE actor_id = ?', req.user.id);
     q.run('DELETE FROM users WHERE id = ?', req.user.id);
@@ -150,6 +169,8 @@ router.delete('/', async (req, res) => {
     removeStored(config.dirs.videos, vid.video_file);
     removeStored(config.dirs.thumbs, vid.thumb_file);
   }
+  for (const s of stories) removeStored(config.dirs.stories, s.media_file);
+  for (const p of previews) removeStored(config.dirs.live, p.preview_file);
   if (avatar && avatar.startsWith('/media/a/')) removeStored(config.dirs.avatars, avatar.slice(9));
   auth.destroySession(req, res);
   res.json({ ok: true });

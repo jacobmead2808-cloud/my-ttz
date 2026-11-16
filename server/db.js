@@ -253,6 +253,16 @@ ensureColumn('videos', 'filter', 'TEXT');
 ensureColumn('videos', 'captions', 'TEXT');
 ensureColumn('videos', 'pinned_at', 'INTEGER');
 ensureColumn('users', 'risk_score', 'INTEGER NOT NULL DEFAULT 0');
+// Existing accounts are treated as verified; new sign-ups set this explicitly.
+ensureColumn('users', 'email_verified', 'INTEGER NOT NULL DEFAULT 1');
+ensureColumn('users', 'birth_date', 'TEXT');
+ensureColumn('users', 'terms_accepted_at', 'INTEGER');
+db.exec(`CREATE TABLE IF NOT EXISTS email_verifications (
+  token_hash TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  expires_at INTEGER NOT NULL
+)`);
 ensureColumn('users', 'risk_updated_at', 'INTEGER');
 ensureColumn('live_streams', 'goal_type', 'TEXT');
 ensureColumn('live_streams', 'goal_target', 'INTEGER');

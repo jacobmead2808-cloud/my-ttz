@@ -19,6 +19,11 @@ async function sendMail({ to, subject, text }) {
     if (!r.ok) throw new Error(`Email provider error ${r.status}: ${await r.text()}`);
     return { delivered: true };
   }
+  if (config.isProd) {
+    // Never write account links to logs on a live site.
+    console.error(`[mail] No email provider configured — could not send “${subject}”. Set MAIL_PROVIDER=resend + RESEND_API_KEY.`);
+    return { delivered: false };
+  }
   fs.mkdirSync(config.outboxDir, { recursive: true });
   const file = path.join(config.outboxDir, `${Date.now()}-${to.replace(/[^a-z0-9@._-]/gi, '_')}.txt`);
   fs.writeFileSync(file, `To: ${to}\nSubject: ${subject}\n\n${text}\n`);

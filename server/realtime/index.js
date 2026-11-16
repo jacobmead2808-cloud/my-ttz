@@ -7,6 +7,8 @@ const { userFromRequest } = require('../lib/auth');
 const hub = require('./hub');
 const live = require('./live');
 const party = require('./party');
+const { createLimiter } = require('../lib/rateLimit');
+const wsLimit = createLimiter({ windowMs: 10000, max: 150 });
 
 function attach(server) {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 128 * 1024 });
@@ -40,6 +42,7 @@ function attach(server) {
     hub.send(ws, { type: 'hello', connId: ws.connId, userId: ws.user ? ws.user.id : null });
     ws.on('pong', () => { ws.isAlive = true; });
     ws.on('message', (raw) => {
+      if (!wsLimit(ws.connId)) return; // drop floods (max 150 messages / 10s per connection)
       let msg;
       try { msg = JSON.parse(raw.toString()); } catch { return; }
       if (!msg || typeof msg.type !== 'string') return;

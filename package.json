@@ -10,7 +10,10 @@
     "seed": "node server/seed.js",
     "make-admin": "node server/scripts/make-admin.js",
     "test": "node --test --test-concurrency=1 \"test/*.test.js\"",
-    "start:prod": "node server/scripts/bootstrap.js && node server/index.js"
+    "start:prod": "node server/scripts/bootstrap.js && node server/index.js",
+    "purge-demo": "node server/scripts/purge-demo.js",
+    "db:check": "node server/scripts/db-check.js",
+    "backup": "node server/scripts/db-check.js --backup"
   },
   "engines": {
     "node": ">=22.13"

@@ -47,7 +47,7 @@ const spammer = client();
 
 test('setup', async () => {
   for (const [c, n] of [[owner, 'boss'], [host, 'streamer'], [fan, 'fan1'], [spammer, 'spammy']]) {
-    const r = await c.post('/api/auth/register', { email: `${n}@t.dev`, username: n, password: 'password1' });
+    const r = await c.post('/api/auth/register', { email: `${n}@t.dev`, username: n, password: 'password1', birthDate: '2000-01-01', acceptTerms: true });
     assert.equal(r.status, 201);
   }
   q.run("UPDATE users SET role = 'admin', is_owner = 1 WHERE username = 'boss'");
@@ -197,4 +197,24 @@ test('watch party: create, join, synced control, chat', async () => {
   r = await fan.get('/api/videos/feed/foryou?vibe=learn');
   assert.ok(!r.body.videos.some((x) => x.id === vid));
   a.close(); b.close();
+});
+
+test('Stripe webhook: signature required, retries credit coins exactly once', async () => {
+  const crypto = require('crypto');
+  process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test_only';
+  const uid = id('fan1');
+  const before = (await fan.get('/api/coins')).body.wallet.coins;
+  const order = q.run("INSERT INTO coin_orders (user_id, coins, price_cents, currency, provider, provider_ref, created_at) VALUES (?, 500, 499, 'usd', 'stripe', 'cs_test_1', ?)", uid, Date.now());
+  const payload = JSON.stringify({ type: 'checkout.session.completed', data: { object: { id: 'cs_test_1', payment_status: 'paid', metadata: { order_id: String(order.lastInsertRowid) } } } });
+  const sign = (body, secret = process.env.STRIPE_WEBHOOK_SECRET) => {
+    const t = Math.floor(Date.now() / 1000);
+    return `t=${t},v1=${crypto.createHmac('sha256', secret).update(`${t}.${body}`).digest('hex')}`;
+  };
+  const send = (sig) => fetch(`${base}/api/coins/webhook`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Stripe-Signature': sig }, body: payload });
+  assert.equal((await send(sign(payload, 'whsec_wrong'))).status, 400);
+  assert.equal((await fan.get('/api/coins')).body.wallet.coins, before, 'forged webhook credits nothing');
+  const results = await Promise.all([send(sign(payload)), send(sign(payload)), send(sign(payload))]);
+  results.forEach((r) => assert.equal(r.status, 200));
+  assert.equal((await fan.get('/api/coins')).body.wallet.coins, before + 500, 'credited exactly once');
+  delete process.env.STRIPE_WEBHOOK_SECRET;
 });
