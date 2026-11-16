@@ -1,0 +1,8 @@
+node_modules
+data
+uploads
+.env
+.claude
+test
+*.log
+apps

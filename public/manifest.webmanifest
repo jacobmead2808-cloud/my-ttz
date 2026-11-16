@@ -1,0 +1,22 @@
+{
+  "name": "Clipzy",
+  "short_name": "Clipzy",
+  "description": "Short videos, LIVE, watch parties and your people.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0e0e10",
+  "theme_color": "#1f6feb",
+  "categories": ["social", "entertainment", "video"],
+  "icons": [
+    { "src": "/assets/brand/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/brand/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/brand/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Upload", "url": "/upload" },
+    { "name": "Go LIVE", "url": "/live/studio" },
+    { "name": "Messages", "url": "/messages" }
+  ]
+}
