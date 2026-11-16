@@ -1,0 +1,89 @@
+apply plugin: 'com.android.application'
+
+// Release signing: apps/mobile/android/keystore.properties (created by `npm run keystore`, never committed).
+def keystorePropsFile = rootProject.file('keystore.properties')
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) keystorePropsFile.withInputStream { keystoreProps.load(it) }
+
+android {
+    namespace = "com.clipzy.app"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "com.clipzy.app"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        // Set by scripts/build.js from apps/mobile/package.json (versionCode must increase for every Play upload).
+        versionCode Integer.parseInt((project.findProperty('clipzyVersionCode') ?: '1').toString())
+        versionName((project.findProperty('clipzyVersionName') ?: '1.0.0').toString())
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        if (keystoreProps['storeFile']) {
+            release {
+                storeFile rootProject.file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            applicationIdSuffix ".dev"
+            resValue "string", "app_name", "Clipzy Dev"
+            resValue "string", "title_activity_main", "Clipzy Dev"
+        }
+        release {
+            if (keystoreProps['storeFile']) signingConfig signingConfigs.release
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
+
+// Refuse to package a release that points at a development or placeholder server.
+tasks.matching { it.name in ['preReleaseBuild'] }.configureEach {
+    doFirst {
+        def cfg = file('src/main/assets/capacitor.config.json')
+        def text = cfg.exists() ? cfg.text : ''
+        def m = text =~ /"url"\s*:\s*"([^"]*)"/
+        def url = m.find() ? m.group(1) : ''
+        if (!url.startsWith('https://') || url =~ /(?i)localhost|127\.0\.0\.1|10\.0\.2\.2|YOUR-DOMAIN/) {
+            throw new GradleException("Release builds must point at your public https:// site (found '${url}'). Build with: npm run build:android -- --url https://your-domain")
+        }
+    }
+}

@@ -9,6 +9,7 @@ import { BRAND } from './brand.js';
 import { avatar, loadingBlock, errorState, toast, actionSheet, emptyState } from './components/ui.js';
 import { fmtCount } from './lib/format.js';
 import { searchBox } from './components/social.js';
+import { resumePush, disablePush, initNativePushTaps, isNativeApp } from './lib/push.js';
 
 // ---------- Routes ----------
 const page = (name) => () => import(`./pages/${name}.js`);
@@ -188,6 +189,7 @@ function accountMenu() {
 }
 
 async function logout() {
+  await disablePush().catch(() => {});
   try { await api.post('/auth/logout'); } catch { /* ignore */ }
   setMe(null);
   setUnread({ notifications: 0, messages: 0 });
@@ -287,7 +289,28 @@ ws.on('mod:case', () => { setUnread({ cases: (store.unread.cases || 0) + 1 }); t
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
 }
-window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); window.__installPrompt = e; });
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); window.__installPrompt = e; showInstallBar(); });
+window.addEventListener('appinstalled', () => { window.__installPrompt = null; document.querySelector('.install-bar')?.remove(); });
+
+/** "Install Clipzy" bar where the browser supports installing (Chrome/Edge on Android and desktop). */
+function showInstallBar() {
+  let dismissed = 0;
+  try { dismissed = Number(localStorage.getItem('installDismissed')) || 0; } catch { /* ignore */ }
+  if (Date.now() - dismissed < 14 * 86400000 || document.querySelector('.install-bar') || isNativeApp()) return;
+  const bar = h('div.install-bar', { role: 'dialog', 'aria-label': `Install ${BRAND.name}` },
+    h('img', { src: '/assets/brand/icon-192.png', alt: '', width: 40, height: 40 }),
+    h('div.install-text', h('b', `Install ${BRAND.name}`), h('span', 'Full screen, faster, with notifications')),
+    h('button.btn.btn-primary.btn-sm', { type: 'button', onclick: async () => {
+      const p = window.__installPrompt;
+      bar.remove();
+      if (!p) return;
+      p.prompt();
+      const r = await p.userChoice.catch(() => null);
+      if (r && r.outcome === 'accepted') window.__installPrompt = null;
+    } }, 'Install'),
+    h('button.icon-btn', { type: 'button', 'aria-label': 'Not now', onclick: () => { try { localStorage.setItem('installDismissed', String(Date.now())); } catch { /* ignore */ } bar.remove(); } }, icon('close', { size: 16 })));
+  document.body.appendChild(bar);
+}
 
 onUnauthorized(() => {
   if (store.me) {
@@ -313,6 +336,18 @@ async function boot() {
   renderTabbar();
   renderAnnouncement();
   ws.start();
+  if (isNativeApp()) {
+    document.documentElement.classList.add('native-app');
+    // Android back button: close the open sheet/modal, else go back a screen, else minimise (like other apps).
+    const App = window.Capacitor.Plugins.App;
+    App?.addListener('backButton', ({ canGoBack }) => {
+      if (document.getElementById('modal-root')?.childElementCount) document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      else if (canGoBack && location.pathname !== '/') history.back();
+      else App.minimizeApp();
+    });
+  }
+  initNativePushTaps();
+  if (store.me) resumePush();
   await startRouter();
 }
 
@@ -320,6 +355,7 @@ async function boot() {
 export function afterLogin(user, next) {
   setMe(user);
   ws.restart();
+  resumePush();
   api.get('/auth/me').then((r) => { if (r.unread) setUnread(r.unread); }).catch(() => {});
   navigate(next && next.startsWith('/') && !next.startsWith('//') ? next : '/', { replace: true });
 }

@@ -4,7 +4,10 @@ This guide takes Clipzy from your PC to a real public website with HTTPS, a doma
 persistent storage, backups and automatic restarts. Read [AUDIT.md](AUDIT.md) first for what is
 finished and what still needs your accounts.
 
-**Recommended setup:** Railway (hosting + storage) + a domain from Cloudflare Registrar + Resend (email)
+**Free option (no monthly cost):** Oracle Cloud Always Free + a free DuckDNS address + Gmail for
+emails. See [deploy/oracle/README.md](deploy/oracle/README.md). The rest of this guide covers Railway (paid).
+
+**Paid setup:** Railway (hosting + storage) + a domain from Cloudflare Registrar + Resend (email)
 + Stripe (only if you sell coins) + a TURN service (for LIVE). Costs are listed at the end.
 
 > Production safety is enforced in code: with `NODE_ENV=production` (set by the Dockerfile) the server
@@ -61,6 +64,7 @@ set `REQUIRE_EMAIL_VERIFICATION=false` temporarily, and remove it once email wor
 | `ICE_SERVERS` | TURN config, see step 7 | for LIVE |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | see step 8 | only to sell coins |
 | `AI_MODERATION=openai`, `OPENAI_API_KEY` | AI text moderation + auto-captions | optional |
+| `FIREBASE_SERVICE_ACCOUNT` | push notifications in the Android app (see APPS.md); browser push needs nothing | for Android push |
 
 Already set by the Dockerfile: `NODE_ENV=production`, `DATA_DIR=/data/db`, `UPLOAD_DIR=/data/uploads`,
 `TRUST_PROXY=1`, `PORT=4000`. Never set `SEED_DEMO` or `COINS_DEMO_MODE` in production (both are ignored).
@@ -151,7 +155,7 @@ identity rules; get advice before promising payouts.
 your PC. That runs the **development** setup: before sharing it, remove demo accounts with
 `npm run purge-demo -- --yes` and change the admin password. Use Railway for anything real.
 
-## Desktop and phone apps
+## Android app, installable website, desktop app
 
-The installers in `apps/` load your hosted site. Set its URL (see [APPS.md](APPS.md)) to your
-`https://` domain before building them for other people.
+All of them use this same server and database. Once the site is live, build the Android APK/AAB with
+`npm run build:android -- --url https://your-domain` in `apps/mobile`. Full steps are in [APPS.md](APPS.md).

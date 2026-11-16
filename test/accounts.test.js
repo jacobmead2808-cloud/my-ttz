@@ -117,3 +117,18 @@ test('teens start private, DMs limited to friends, no LIVE, coins or gifts', asy
   r = await c.post('/api/live', { title: 'hi' });
   assert.equal(r.status, 403);
 });
+
+test('usernames and display names can never reveal an email address', async () => {
+  const c = client();
+  let r = await c.post('/api/auth/register', { email: 'jane.doe92@gmail.com', username: 'jane.doe92gmail.com', password: 'password1', birthDate: '1990-01-01', acceptTerms: true });
+  assert.equal(r.status, 400);
+  assert.match(r.body.error, /email/);
+  r = await c.post('/api/auth/register', { email: 'jane.doe92@gmail.com', username: 'janed', displayName: 'jane.doe92@gmail.com', password: 'password1', birthDate: '1990-01-01', acceptTerms: true });
+  assert.equal(r.status, 400);
+  r = await c.post('/api/auth/register', { email: 'jane.doe92@gmail.com', username: 'janed', password: 'password1', birthDate: '1990-01-01', acceptTerms: true });
+  assert.equal(r.status, 201);
+  r = await c.patch('/api/me', { username: 'janedoe92gmail' });
+  assert.equal(r.status, 400);
+  r = await client().get('/api/users/janed');
+  assert.equal(JSON.stringify(r.body).includes('jane.doe92'), false, 'public profile never includes the email');
+});

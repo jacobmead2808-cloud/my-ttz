@@ -121,6 +121,7 @@ router.post('/:id/messages', requireVerified, sendLimit, (req, res) => {
     unreadTotal: unreadTotal(other.id),
   });
   hub.sendToUser(req.user.id, { type: 'dm:sent', message: forSender });
+  require('../lib/push').forMessage({ toUserId: other.id, from: req.user, conversationId: c.id, text: body });
   res.status(201).json({ message: forSender });
 });
 

@@ -774,7 +774,7 @@ body[data-shell="live"] .view { overflow: hidden; }
   .feed-status-full { color: var(--text); background: var(--bg); }
 
   .vp-stage { height: calc(100dvh - var(--tabbar-h)); }
-  .vp-stage .feed-item { padding: 0; }
+  .vp-stage .feed-item { padding: 0; width: 100%; }
   .vp-stage .player { max-width: none; }
   .vp-back { top: 12px; left: 8px; }
   .vp-stage .player-top { top: 56px; }

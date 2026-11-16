@@ -4,16 +4,22 @@
   "private": true,
   "description": "Clipzy for Android and iOS (Capacitor shell around the hosted site)",
   "scripts": {
-    "android": "cap add android && node scripts/permissions.js && cap open android",
-    "ios": "cap add ios && node scripts/permissions.js && cap open ios",
-    "sync": "cap sync && node scripts/permissions.js"
+    "assets": "node scripts/make-assets.js",
+    "build:android": "node scripts/build.js",
+    "build:android:dev": "node scripts/build.js --dev",
+    "keystore": "node scripts/keystore.js",
+    "sync": "cap sync android && node scripts/permissions.js",
+    "open:android": "cap open android"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.2",
+    "@capacitor/app": "8.1.2",
     "@capacitor/core": "^8.6.2",
-    "@capacitor/ios": "^8.6.2"
+    "@capacitor/ios": "^8.6.2",
+    "@capacitor/push-notifications": "8.1.3"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.6.2"
-  }
+  },
+  "versionCode": 1
 }

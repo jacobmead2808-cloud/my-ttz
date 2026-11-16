@@ -25,6 +25,23 @@ function username(v, { allowReserved = false } = {}) {
   return v;
 }
 
+// Phones and browsers often autofill an email into the username box; the '@' gets stripped and the
+// username ends up revealing the address (e.g. "jane.doe92gmail.com"). Usernames and display names
+// are public, so anything that looks like an email address is refused.
+const MAIL_DOMAINS = /(gmail|googlemail|hotmail|outlook|yahoo|ymail|icloud|aol|protonmail|proton|gmx|yandex|msn|btinternet|sky|virginmedia|live|mail)\.?(com|co\.?uk|net|org|me|de|fr|ru|ca|ie)(?![a-z0-9])/;
+function assertNoEmail(value, accountEmail, what = 'Username') {
+  const s = String(value || '').toLowerCase();
+  if (!s) return;
+  if (/[^\s@]+@[^\s@]+\.[a-z]{2,}/.test(s) || MAIL_DOMAINS.test(s.replace(/[\s_]/g, ''))) throw bad(`${what} can’t contain an email address — it’s shown publicly.`);
+  if (accountEmail) {
+    const [local, domain = ''] = String(accountEmail).toLowerCase().split('@');
+    const squash = (x) => x.replace(/[^a-z0-9]/g, '');
+    const site = squash(domain.split('.')[0] || '');
+    if (site && squash(s).includes(squash(local) + site))
+      throw bad(`${what} can’t contain your email address — it’s shown publicly.`);
+  }
+}
+
 function email(v) {
   v = str(v, { name: 'Email', required: true, max: 254 }).toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) throw bad('Please enter a valid email address');
@@ -72,4 +89,4 @@ function likeEscape(s) {
   return s.replace(/[\\%_]/g, (c) => '\\' + c);
 }
 
-module.exports = { str, username, email, password, oneOf, int, bool, extractHashtags, extractMentions, likeEscape };
+module.exports = { str, username, assertNoEmail, email, password, oneOf, int, bool, extractHashtags, extractMentions, likeEscape };

@@ -24,6 +24,7 @@ function notify({ userId, actorId, type, videoId = null, commentId = null, strea
   q.run('INSERT INTO notifications (user_id, actor_id, type, video_id, comment_id, stream_id, body, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
     userId, actorId, type, videoId, commentId, streamId, body, now());
   pushCount(userId, type);
+  require('./push').forNotification({ userId, actorId, type, videoId, streamId, body });
 }
 
 function unnotify({ userId, actorId, type, videoId = null, commentId = null }) {

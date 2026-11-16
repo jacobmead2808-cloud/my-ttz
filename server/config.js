@@ -60,7 +60,15 @@ module.exports = {
   mail: {
     provider: (env.MAIL_PROVIDER || '').toLowerCase(),
     resendKey: env.RESEND_API_KEY || '',
-    from: env.MAIL_FROM || `${env.APP_NAME || 'Clipzy'} <no-reply@example.com>`,
+    from: env.MAIL_FROM || `${env.APP_NAME || 'Clipzy'} <${env.SMTP_USER && env.SMTP_USER.includes('@') ? env.SMTP_USER : 'no-reply@example.com'}>`,
+    // MAIL_PROVIDER=smtp: any mail server, e.g. Gmail (smtp.gmail.com, an app password).
+    smtp: {
+      host: env.SMTP_HOST || '',
+      port: Number(env.SMTP_PORT) || 465,
+      user: env.SMTP_USER || '',
+      pass: (env.SMTP_PASS || '').replace(/\s+/g, ''),
+      secure: env.SMTP_SECURE || ((Number(env.SMTP_PORT) || 465) === 465 ? 'tls' : 'starttls'),
+    },
   },
   iceServers,
 };

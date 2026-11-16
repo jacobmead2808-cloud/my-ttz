@@ -462,3 +462,21 @@ body[data-shell="party"] .view { overflow: hidden; }
 .legal-nav a.active { background: var(--text); color: var(--bg); border-color: var(--text); }
 .legal-note { margin-top: 32px; padding: 12px 14px; border: 1px dashed var(--border); border-radius: 8px; font-size: 13px; }
 @media (max-width: 720px) { .verify-bar { font-size: 12px; padding: 0 8px; gap: 6px; } .verify-bar > svg { display: none; } }
+
+/* ---------- Install bar (PWA) ---------- */
+.install-bar { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 60; display: flex; align-items: center; gap: 12px; width: min(440px, calc(100vw - 24px)); padding: 10px 10px 10px 12px; border-radius: 14px; background: var(--surface, var(--bg)); color: var(--text); border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0, 0, 0, .18); }
+.install-bar img { border-radius: 10px; flex: none; }
+.install-text { display: flex; flex-direction: column; min-width: 0; flex: 1; font-size: 14px; line-height: 1.3; }
+.install-text span { color: var(--muted, #6b7280); font-size: 12px; }
+@media (max-width: 720px) { .install-bar { bottom: calc(72px + env(safe-area-inset-bottom)); } }
+/* Status bar / notch inset (installed app, Android app, iPhone home-screen app). The tab bar
+   already pads for the bottom inset; this keeps the 100dvh shell inside the screen. */
+.app-shell { box-sizing: border-box; padding-top: env(safe-area-inset-top); }
+/* Phones: sound + captions buttons sit below the For You tabs and the vibe chips, not on top of them. */
+@media (max-width: 720px) { .feed-page .player-top, body[data-shell="feed"] .player-top { top: 112px; } }
+/* The tab bar grows by the bottom inset (gesture bar), so its grid row must grow with it. */
+@media (max-width: 720px) {
+  .app-shell { grid-template-rows: auto 1fr calc(var(--tabbar-h) + env(safe-area-inset-bottom)); }
+  body[data-shell="feed"] .app-shell, body[data-shell="video"] .app-shell, body[data-shell="live"] .app-shell { grid-template-rows: 0 1fr calc(var(--tabbar-h) + env(safe-area-inset-bottom)); }
+  body[data-shell="bare"] .app-shell { grid-template-rows: auto 1fr; }
+}

@@ -1,72 +1,110 @@
-# Clipzy as an app (phone + computer)
+# Clipzy apps: installable website, Android app, desktop app
 
-Clipzy can be installed three ways. All of them show your **hosted** site (see DEPLOY.md), so put it
-online first and use its `https://` address below. Every app updates automatically when you update
-the website — no re-downloads needed.
+Every version opens your **hosted** site (see [DEPLOY.md](DEPLOY.md)), so they all share the same
+accounts, videos, messages and database. Updating the website updates every app; the Android app
+only needs rebuilding when its native parts change (icon, permissions, plugins).
 
-| | Effort | Where people get it |
+| | Where people get it | Status |
 |---|---|---|
-| 1. Install from the browser (PWA) | none — already built in | `/download` page → **Install** |
-| 2. Desktop app (.exe / .dmg) like Discord | ~10 min | a download link on your site |
-| 3. Phone apps (Android / iPhone) like TikTok | ~30 min + store accounts | Google Play / App Store (or an APK) |
+| 1. Installable website (PWA) | "Install" on your site | Built and tested |
+| 2. Android app (APK + Google Play AAB) | APK download link / Google Play | Built and tested on an Android 17 emulator |
+| 3. Desktop app (Windows `.exe`) | download link | Built earlier (`apps/desktop`) |
 
 ---
 
-## 1. Install from the browser (works today)
-Open your site → sidebar **Get the app** (or `/download`). It shows the right steps for each device:
-- **Windows / Mac / Chromebook:** Chrome or Edge → **Install** button (or the install icon in the address bar).
-- **Android:** Chrome → ⋮ → **Install app**.
-- **iPhone / iPad:** Safari → Share → **Add to Home Screen**.
+## 1. Installable website (PWA)
 
-It gets its own icon, opens in its own window and stays signed in. Requires HTTPS (any host in DEPLOY.md).
+Nothing to build. On your `https://` site:
+- **Android (Chrome):** an **Install Clipzy** bar appears at the bottom, or ⋮ → **Install app**.
+- **Windows / Mac / ChromeOS (Chrome, Edge):** the install bar, or the install icon in the address bar.
+- **iPhone (Safari):** Share → **Add to Home Screen** (`/download` shows these steps).
 
-## 2. Desktop app — Windows `.exe`, Mac `.dmg`, Linux `.AppImage`
-The project is in `apps/desktop` (Electron).
+It opens in its own window with the Clipzy icon, shows an **offline** screen when there's no connection,
+and supports **push notifications** (Settings → Notifications → Turn on).
 
-1. Install Node.js (you already have it). In VS Code open a terminal:
+Tested: manifest and installability report no errors in Chrome; offline screen served by the service
+worker when the server is down; real push delivered through Microsoft's push service and shown by Edge.
+Through Google's push service the message was accepted, but a temporary automated Chrome profile
+didn't display it, so test once on a real phone after you deploy.
+
+## 2. Android app (`apps/mobile`)
+
+A Capacitor app (`com.clipzy.app`) that opens your site, with:
+- Clipzy icon (adaptive + themed) and splash screen
+- camera, microphone and gallery uploads (system photo picker, no storage permission)
+- Android back button, safe areas for gesture/notch phones
+- push notifications through Firebase
+- phones and tablets
+
+Coins can't be bought inside the Android app, because Google Play requires its own billing for digital
+items. Balances and gifts work normally, and purchases stay available on the website.
+
+### One-time setup
+Requirements on your PC (already present on this machine): Android Studio (SDK) and JDK 21.
+```bash
+cd apps/mobile
+npm install
+```
+
+### Build the release APK + AAB
+1. **Create your signing key** (once; you pick the password):
    ```bash
-   cd apps/desktop
-   npm install
+   npm run keystore
    ```
-2. Edit `apps/desktop/config.json` → set `"url"` to your hosted address (e.g. `https://clipzy.up.railway.app`).
-3. Try it: `npm start` (opens Clipzy in its own window).
-4. Build the installer:
+   Back up `apps/mobile/android/clipzy-release.jks` and the password (password manager). Google Play
+   only accepts updates signed with this key.
+2. **Build** with your live address:
    ```bash
-   npm run dist:win
+   npm run build:android -- --url https://your-domain
    ```
-   → `apps/desktop/dist/Clipzy-Setup.exe`. (Build the Mac `.dmg` on a Mac with `npm run dist:mac`; Linux with `npm run dist:linux`.)
-5. Upload the file somewhere public (easiest: your GitHub repo → **Releases → New release → attach file**),
-   then paste the link into `public/js/brand.js` → `downloads.windows`. The **Get the app** page now shows a
-   *Download for Windows* button.
+   You get `apps/mobile/dist/clipzy-1.0.0.apk` (install directly) and `clipzy-1.0.0.aab` (Google Play).
+   The build refuses `localhost`, `http://` and placeholder addresses.
+3. For every new version, raise `versionCode` (and `version`) in `apps/mobile/package.json`.
 
-Notes: Windows SmartScreen shows “unknown publisher” until you buy a code-signing certificate (~$100–300/yr);
-users click **More info → Run anyway**. Mac apps need an Apple Developer account ($99/yr) to sign/notarise,
-otherwise users right-click → Open.
+### Push notifications in the Android app (needs a free Firebase project)
+1. console.firebase.google.com → **Add project** → **Add app → Android**, package name `com.clipzy.app`.
+2. Download `google-services.json` → put it in `apps/mobile/android/app/`.
+3. Project settings → **Service accounts → Generate new private key** → put that JSON in the server
+   variable `FIREBASE_SERVICE_ACCOUNT` (Railway → Variables, paste as one line).
+4. Rebuild the app (step 2 above). Push is only included when `google-services.json` is present.
 
-## 3. Phone apps — Android & iPhone
-The project is in `apps/mobile` (Capacitor wraps your site in a real native app with camera/mic access).
+Browser and installed-website push needs none of this.
 
-1. Edit `apps/mobile/capacitor.config.json` → `"server": { "url": "https://your-domain" }`.
-2. ```bash
-   cd apps/mobile
-   npm install
-   ```
-3. **Android** (Windows/Mac/Linux): install **Android Studio**, then:
-   ```bash
-   npm run android
-   ```
-   Android Studio opens → plug in your phone (USB debugging on) and press ▶ to test, or
-   **Build → Generate Signed App Bundle/APK** to make an `.apk` (share directly) or `.aab` (Google Play).
-   Publishing on Google Play: one-time $25 developer account → Play Console → create app → upload the `.aab`.
-4. **iPhone** (needs a Mac with Xcode): `npm run ios` → Xcode opens → choose your team → ▶ to test.
-   Publishing: Apple Developer Program ($99/yr) → Product → Archive → upload to App Store Connect → submit for review.
+### Sharing the APK
+Upload `clipzy-x.y.z.apk` (e.g. GitHub → Releases) and put the link in `public/js/brand.js` →
+`downloads.android`. People must allow "Install unknown apps" for their browser.
 
-The `permissions` script automatically adds camera/microphone permissions (needed for LIVE and Duets).
-After changing `capacitor.config.json`, run `npm run sync`.
+### Google Play
+1. play.google.com/console, one-time $25 developer registration (identity verification).
+2. Create app → fill the store listing, content rating, data safety (see `/privacy`), target audience
+   13+ → **Production / Internal testing → Create release** → upload the `.aab`.
+3. Use **Play App Signing** (default). Your key becomes the upload key.
 
-Then paste your store links into `public/js/brand.js` → `downloads.android` / `downloads.ios`.
+### Testing on this PC
+```bash
+npm run build:android:dev
+```
+This builds `dist/clipzy-dev.apk` ("Clipzy Dev"), which talks to `http://localhost:4000` on your PC.
+Start an emulator from Android Studio and run Clipzy (`npm run dev`) on port 4000, then:
+```bash
+adb reverse tcp:4000 tcp:4000
+```
+```bash
+adb install -r dist/clipzy-dev.apk
+```
 
----
+Tested on the emulator (Android 17):
+- launch with icon and splash
+- the feed plays
+- login works
+- gallery upload, posting and playback all worked
+- camera + microphone permission prompts work and grant access
+- back button navigation works
+- layout fits under the status bar and above the gesture bar
 
-**Not tested here:** the desktop and phone projects are set up, but building them requires downloading
-Electron / Android Studio / Xcode on your machine, so they haven’t been built or run in this environment.
+### Regenerating icons / splash
+`npm run assets` (Android) and `node server/scripts/make-icons.js` (web) redraw everything from the logo.
+
+## 3. Desktop app (`apps/desktop`)
+Set `"url"` in `apps/desktop/config.json` to your `https://` address, then `npm run dist:win`.
+See the comments in that folder.

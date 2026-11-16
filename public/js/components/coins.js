@@ -6,6 +6,7 @@ import { ws } from '../lib/ws.js';
 import { store, emit, on } from '../lib/store.js';
 import { fmtCount } from '../lib/format.js';
 import { toast, toastError, openModal, loadingBlock, errorState, avatar, requireLogin } from './ui.js';
+import { isNativeApp } from '../lib/push.js';
 
 export const coinIcon = (size = 16) => h('span.coin', { style: { width: `${size}px`, height: `${size}px`, fontSize: `${Math.round(size * 0.6)}px` } }, 'C');
 
@@ -38,13 +39,14 @@ export function openRecharge({ onDone, need = 0 } = {}) {
     (async () => {
       let info;
       try { info = await api.get('/coins'); setWallet(info.wallet); } catch (e) { body.replaceChildren(errorState(e)); return; }
+      const inApp = isNativeApp() && info.paymentMode === 'stripe';
       let selected = info.packages.find((p) => p.coins >= Math.max(need, 1)) || info.packages[0];
       let custom = null;
       const buyBtn = h('button.btn.btn-primary.btn-lg.btn-block.buy-btn');
       const paintBuy = () => {
         const cents = custom ? Math.max(1, Math.round(custom * info.centsPerCoin * (1 - (info.discount ? info.discount.percent : 0) / 100))) : selected.priceCents;
         buyBtn.replaceChildren(icon('shield', { size: 18 }), ` ${info.paymentMode === 'demo' ? 'Get' : 'Buy for'} ${info.paymentMode === 'demo' ? `${fmtCount(custom || selected.coins)} demo coins` : money(cents, info.currency)}`);
-        buyBtn.disabled = info.paymentMode === 'disabled' || (custom !== null && (custom < 30 || custom > 250000));
+        buyBtn.disabled = inApp || info.paymentMode === 'disabled' || (custom !== null && (custom < 30 || custom > 250000));
       };
       const grid = h('div.pkg-grid');
       const customInput = h('input.input.pkg-custom-input.hidden', { type: 'number', min: 30, max: 250000, placeholder: 'Coins (30–250,000)' });
@@ -74,6 +76,7 @@ export function openRecharge({ onDone, need = 0 } = {}) {
         info.discount ? h('div.recharge-sale', `${info.discount.label || 'Sale'}: save ${info.discount.percent}% on every pack`) : null,
         info.paymentMode === 'demo' ? h('div.recharge-demo', icon('alert', { size: 14 }), ' Demo mode — no real payments are taken. Configure Stripe to sell coins.') : null,
         info.paymentMode === 'disabled' ? h('div.form-error', 'Coin purchases aren’t set up on this server yet.') : null,
+        inApp ? h('div.recharge-demo', icon('alert', { size: 14 }), ' Coins can’t be bought inside the Android app. Your balance and gifts work as normal.') : null,
         grid, customInput,
         w.diamonds ? h('button.recharge-row', { type: 'button', onclick: async () => {
           try { const r = await api.post('/coins/exchange', { diamonds: w.diamonds }); setWallet(r.wallet); toast(`Exchanged ${w.diamonds} diamonds for coins`, { type: 'success' }); close(); } catch (e) { toastError(e); }

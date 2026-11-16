@@ -257,6 +257,17 @@ ensureColumn('users', 'risk_score', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('users', 'email_verified', 'INTEGER NOT NULL DEFAULT 1');
 ensureColumn('users', 'birth_date', 'TEXT');
 ensureColumn('users', 'terms_accepted_at', 'INTEGER');
+db.exec(`CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  endpoint TEXT NOT NULL UNIQUE,
+  p256dh TEXT,
+  auth TEXT,
+  user_agent TEXT,
+  created_at INTEGER NOT NULL
+)`);
+db.exec('CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id)');
 db.exec(`CREATE TABLE IF NOT EXISTS email_verifications (
   token_hash TEXT PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

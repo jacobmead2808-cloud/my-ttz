@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1f6feb">
+  <title>Offline | Clipzy</title>
+  <link rel="icon" href="/assets/brand/favicon.svg" type="image/svg+xml">
+  <style>
+    :root { color-scheme: light dark; --bg: #ffffff; --text: #111113; --muted: #5f6368; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #0e0e10; --text: #f4f4f5; --muted: #a1a1aa; } }
+    html, body { height: 100%; margin: 0; }
+    body { display: grid; place-items: center; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; padding: 24px; box-sizing: border-box; text-align: center; }
+    img { width: 64px; height: 64px; }
+    h1 { font-size: 22px; margin: 16px 0 4px; }
+    p { color: var(--muted); margin: 0 0 20px; max-width: 320px; }
+    button { border: 0; border-radius: 10px; padding: 12px 28px; background: #1f6feb; color: #fff; font: 600 16px system-ui, sans-serif; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <main>
+    <img src="/assets/brand/logo.svg" alt="">
+    <h1>You're offline</h1>
+    <p>Clipzy needs an internet connection for videos, messages and LIVE. We'll reconnect as soon as you're back online.</p>
+    <button type="button" id="retry">Try again</button>
+  </main>
+  <script src="/js/offline.js"></script>
+</body>
+</html>

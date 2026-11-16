@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Clipzy</string>
+    <string name="title_activity_main">Clipzy</string>
+    <string name="package_name">com.clipzy.app</string>
+    <string name="custom_url_scheme">com.clipzy.app</string>
+</resources>

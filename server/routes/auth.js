@@ -25,6 +25,8 @@ router.post('/register', registerLimit, async (req, res) => {
   const username = v.username(req.body.username);
   const password = v.password(req.body.password);
   const displayName = v.str(req.body.displayName, { name: 'Display name', max: 40 }) || username;
+  v.assertNoEmail(username, email, 'Username');
+  v.assertNoEmail(displayName, email, 'Display name');
   const birthDate = accounts.parseBirthDate(req.body.birthDate);
   const age = accounts.ageOn(birthDate);
   if (age < accounts.MIN_AGE) throw bad(`You must be at least ${accounts.MIN_AGE} years old to use ${config.appName}.`);

@@ -59,6 +59,8 @@ router.patch('/', (req, res) => {
       sets.username = name;
     }
   }
+  if (sets.username) v.assertNoEmail(sets.username, u.email, 'Username');
+  if (sets.display_name) v.assertNoEmail(sets.display_name, u.email, 'Display name');
   automod.assertAllowed([sets.username, sets.display_name, sets.bio].filter(Boolean).join('\n'), { user: u, context: 'profile' });
   const keys = Object.keys(sets);
   if (keys.length) q.run(`UPDATE users SET ${keys.map((k) => `${k} = :${k}`).join(', ')} WHERE id = :id`, { ...sets, id: u.id });

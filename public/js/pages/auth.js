@@ -73,7 +73,7 @@ export default function authPage(ctx) {
   if (ctx.mode === 'signup') {
     const err = errorBox();
     const email = input('email', 'email', 'Email address', { autocomplete: 'email', maxlength: 254 });
-    const username = input('username', 'text', 'Username', { autocomplete: 'username', minlength: 2, maxlength: 24, pattern: '[A-Za-z0-9_][A-Za-z0-9_.]*' });
+    const username = input('username', 'text', 'Username (public, not your email)', { autocomplete: 'off', autocapitalize: 'none', spellcheck: 'false', minlength: 2, maxlength: 24, pattern: '[A-Za-z0-9_][A-Za-z0-9_.]*' });
     const display = input('displayName', 'text', 'Display name (optional)', { required: false, maxlength: 40 });
     const pw = pwInput('password', 'Password', 'new-password');
     const today = new Date().toISOString().slice(0, 10);

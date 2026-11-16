@@ -6,9 +6,17 @@ const config = require('../config');
 /**
  * Sends an email. With no provider configured (development), the message is printed to the
  * console and written to data/outbox so you can click password-reset links locally.
- * Set MAIL_PROVIDER=resend + RESEND_API_KEY + MAIL_FROM to deliver real email.
+ * Real email: MAIL_PROVIDER=smtp (+ SMTP_HOST/PORT/USER/PASS, e.g. Gmail app password, free) or
+ * MAIL_PROVIDER=resend (+ RESEND_API_KEY + MAIL_FROM on a verified domain).
  */
 async function sendMail({ to, subject, text }) {
+  if (config.mail.provider === 'smtp') {
+    const s = config.mail.smtp;
+    if (!s.host) throw new Error('SMTP_HOST is not set');
+    if (config.isProd && s.secure === 'none') throw new Error('SMTP without TLS is not allowed in production');
+    await require('./smtp').sendSmtp({ ...s, from: config.mail.from, to, subject, text });
+    return { delivered: true };
+  }
   if (config.mail.provider === 'resend') {
     if (!config.mail.resendKey) throw new Error('RESEND_API_KEY is not set');
     const r = await fetch('https://api.resend.com/emails', {

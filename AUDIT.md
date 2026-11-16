@@ -121,3 +121,30 @@ Needs you, in order (full instructions in [DEPLOY.md](DEPLOY.md)):
 8. Have the legal pages reviewed; edit `public/js/pages/legal.js`.
 9. Optional: Stripe (test keys first), then OpenAI moderation.
 10. Turn on Railway volume backups; try a restore once.
+
+---
+
+## Update: apps, push notifications, mobile fixes (16 November 2026)
+
+Tests: **47 automated tests** pass (new `test/push.test.js` decrypts real Web Push payloads and checks
+the VAPID and Firebase signatures against local mock services).
+
+| Area | Result |
+|---|---|
+| Demo data | Local demo accounts, their videos and a leftover duet test video deleted (database backed up first to `data/manual-backups/`). |
+| Bug: phones | Single-video page showed a black screen on phones (player was 0px wide). **Fixed.** |
+| Bug: phones | Sound/caption buttons overlapped the For You category chips. **Fixed.** |
+| Bug: notch / gesture phones | Bottom tab bar was cut off under the Android gesture bar; content went under the status bar. **Fixed** (safe-area insets). |
+| PWA | Manifest + installability: 0 errors in Chrome. Maskable and monochrome icons, install bar, offline screen (tested with the server stopped). |
+| Push | Web Push built in (no account needed). Tested end to end in Edge (Microsoft push service → notification shown). Google's push service accepted messages; display wasn't observed in a temporary automated Chrome profile, so check on a real phone. Android app push uses Firebase (**needs you**: free Firebase project). |
+| Android app | Real Android Studio project committed (`apps/mobile/android`): icon, splash, permissions, back button, push plugin, signing, version codes. Release builds refuse localhost/http/placeholder URLs (checked in both the build script and Gradle). Tested on the Android 17 emulator: login, feed, gallery upload, posting, playback, camera/mic permission, back button. |
+| Google Play rule | Coin purchases are hidden inside the Android app (Play requires its own billing for digital goods). |
+
+Still **needs you**:
+- Approve and run the Railway deployment.
+- Choose the owner email and password.
+- Buy a domain.
+- Set up email (Resend).
+- Create the signing key (`npm run keystore`, your password).
+- Optional: a Firebase project for Android push.
+- Optional: a Google Play developer account ($25).

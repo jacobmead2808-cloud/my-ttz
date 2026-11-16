@@ -15,6 +15,7 @@ export default function settingsPage(ctx) {
     ['privacy', 'Privacy', 'lock'],
     ['moderation', 'Moderation & filters', 'shield'],
     ['blocked', 'Blocked accounts', 'block'],
+    ['notifications', 'Notifications', 'bell'],
     ['display', 'Display', 'moon'],
     ['security', 'Security & sessions', 'shield'],
   ];
@@ -139,6 +140,33 @@ export default function settingsPage(ctx) {
           return r;
         }) : [emptyState({ iconName: 'block', title: "You haven't blocked anyone" })]));
       }).catch((e) => list.replaceChildren(h('p.form-error', e.message)));
+    } else if (k === 'notifications') {
+      const state = h('p.muted.small', 'Checking this device...');
+      const actions = h('div.row.gap');
+      const paint = async () => {
+        const { pushStatus, enablePush, disablePush } = await import('../lib/push.js');
+        const st = await pushStatus().catch(() => 'unsupported');
+        const msg = {
+          on: 'Push notifications are on for this device.',
+          off: 'Get notified about follows, comments, mentions, messages and LIVEs, even when Clipzy is closed.',
+          denied: 'Notifications are blocked for Clipzy on this device. Allow them in your browser or phone settings, then come back here.',
+          unsupported: 'This browser can’t receive push notifications. On iPhone, add Clipzy to your Home Screen first; on Android use Chrome.',
+          unavailable: 'Push notifications aren’t set up for the app on this server yet.',
+        }[st];
+        state.textContent = msg;
+        const btn = (label, cls, fn) => h(`button.btn.${cls}`, { onclick: async (e) => {
+          e.currentTarget.disabled = true;
+          try { await fn(); } catch (err) { toastError(err); }
+          paint();
+        } }, label);
+        actions.replaceChildren(...[
+          st === 'off' ? btn('Turn on', 'btn-primary', async () => { await enablePush(); toast('Notifications turned on', { type: 'success' }); }) : null,
+          st === 'on' ? btn('Send a test', 'btn-secondary', async () => { const r = await api.post('/push/test'); toast(r.delivered ? 'Test sent' : 'No device could be reached', { type: r.delivered ? 'success' : 'error' }); }) : null,
+          st === 'on' ? btn('Turn off', 'btn-secondary', async () => { await disablePush(); toast('Notifications turned off'); }) : null,
+        ].filter(Boolean));
+      };
+      body.replaceChildren(card('Push notifications', state, actions));
+      paint();
     } else if (k === 'display') {
       const themeSeg = h('div.seg', ['dark', 'light', 'system'].map((t) => h(`button.seg-btn${getTheme() === t ? '.active' : ''}`, { onclick: () => { setTheme(t); show('display'); } }, icon(t === 'light' ? 'sun' : t === 'dark' ? 'moon' : 'monitor', { size: 16 }), ' ', t[0].toUpperCase() + t.slice(1))));
       body.replaceChildren(card('Appearance', row('Theme', 'Dark mode is the default. System follows your device setting.', themeSeg)),

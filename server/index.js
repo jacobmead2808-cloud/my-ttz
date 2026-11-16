@@ -96,6 +96,7 @@ api.use('/stories', require('./routes/stories'));
 api.use('/analytics', require('./routes/analytics'));
 api.use('/coins', require('./routes/coins'));
 api.use('/party', require('./routes/party'));
+api.use('/push', require('./routes/push'));
 api.use('/', require('./routes/discover'));
 api.use('/', require('./routes/notifications'));
 api.use((_req, _res, next) => next(new HttpError(404, 'API route not found')));
