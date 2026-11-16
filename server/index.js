@@ -181,7 +181,7 @@ for (const f of fs.readdirSync(config.dirs.tmp)) fs.rm(path.join(config.dirs.tmp
 const server = http.createServer(app);
 realtime.attach(server);
 
-if (require.main === module) {
+function start() {
   server.listen(config.port, config.host, () => {
     console.log(`\n  ${config.appName} is running at ${config.baseUrl}`);
     if (!config.mail.provider) console.log(config.isProd
@@ -204,4 +204,6 @@ if (require.main === module) {
   process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
-module.exports = { app, server };
+if (require.main === module) start();
+
+module.exports = { app, server, start };
