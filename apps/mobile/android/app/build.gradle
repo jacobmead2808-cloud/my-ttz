@@ -40,6 +40,8 @@ android {
         }
         release {
             if (keystoreProps['storeFile']) signingConfig signingConfigs.release
+            // --sideload: install-only APK signed with the local debug key (not accepted by Google Play)
+            else if (project.hasProperty('clipzySideload')) signingConfig signingConfigs.debug
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

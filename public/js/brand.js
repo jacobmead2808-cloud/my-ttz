@@ -16,7 +16,7 @@ export const BRAND = {
     windows: '', // e.g. https://github.com/you/clipzy/releases/latest/download/Clipzy-Setup.exe
     mac: '', // .dmg
     linux: '', // .AppImage
-    android: '', // Google Play link or .apk
+    android: '/downloads/clipzy.apk', // Google Play link or .apk (the APK is uploaded with the site, not kept in Git)
     ios: '', // App Store link
   },
 };

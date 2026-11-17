@@ -4,3 +4,6 @@ uploads/
 .env
 
 *.zip
+
+# Android APK served from the site (built by apps/mobile, uploaded with releases)
+public/downloads/

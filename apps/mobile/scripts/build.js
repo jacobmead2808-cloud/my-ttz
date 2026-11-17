@@ -88,11 +88,12 @@ console.log(`Using JDK: ${jdk}`);
 
 const keystore = fs.existsSync(path.join(android, 'keystore.properties'));
 const unsigned = flag('unsigned');
-if (!dev && !keystore && !unsigned) fail('No signing key yet. Create one with: npm run keystore   (keep the file and password safe — Google Play needs the same key for every update)');
+const sideload = flag('sideload') && !keystore;
+if (!dev && !keystore && !unsigned && !sideload) fail('No signing key yet. Create one with: npm run keystore   (keep the file and password safe — Google Play needs the same key for every update)');
 
 const gradlew = path.join(android, process.platform === 'win32' ? 'gradlew.bat' : 'gradlew');
-const props = [`-PclipzyVersionCode=${pkg.versionCode || 1}`, `-PclipzyVersionName=${pkg.version}`];
-const tasks = dev ? ['assembleDebug'] : ['assembleRelease', 'bundleRelease'];
+const props = [`-PclipzyVersionCode=${pkg.versionCode || 1}`, `-PclipzyVersionName=${pkg.version}`, ...(sideload ? ['-PclipzySideload=1'] : [])];
+const tasks = dev ? ['assembleDebug'] : sideload ? ['assembleRelease'] : ['assembleRelease', 'bundleRelease'];
 const env = { ...process.env, JAVA_HOME: jdk };
 run(gradlew, [...tasks, ...props, '--console=plain'], { cwd: android, env });
 
@@ -104,6 +105,6 @@ console.log('\nBuilt:');
 if (dev) copy(path.join(out, 'apk', 'debug', 'app-debug.apk'), 'clipzy-dev.apk');
 else {
   const v = pkg.version;
-  copy(path.join(out, 'apk', 'release', 'app-release.apk'), `clipzy-${v}.apk`) || copy(path.join(out, 'apk', 'release', 'app-release-unsigned.apk'), `clipzy-${v}-unsigned.apk`);
+  copy(path.join(out, 'apk', 'release', 'app-release.apk'), sideload ? `clipzy-${v}-sideload.apk` : `clipzy-${v}.apk`) || copy(path.join(out, 'apk', 'release', 'app-release-unsigned.apk'), `clipzy-${v}-unsigned.apk`);
   copy(path.join(out, 'bundle', 'release', 'app-release.aab'), `clipzy-${v}${keystore ? '' : '-unsigned'}.aab`);
 }
