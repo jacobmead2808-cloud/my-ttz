@@ -111,58 +111,9 @@ export function createViewer(streamId, { onStream, onState }) {
   };
 }
 
-/** Animated canvas + tone: lets you test LIVE without a camera. */
-export function testPatternStream(label = 'LIVE') {
-  const canvas = document.createElement('canvas');
-  canvas.width = 540;
-  canvas.height = 960;
-  const ctx = canvas.getContext('2d');
-  let raf;
-  let t0 = performance.now();
-  const draw = (now) => {
-    const t = (now - t0) / 1000;
-    const g = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-    g.addColorStop(0, `hsl(${(t * 40) % 360},80%,55%)`);
-    g.addColorStop(1, `hsl(${(t * 40 + 120) % 360},80%,35%)`);
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    for (let i = 0; i < 6; i++) {
-      ctx.beginPath();
-      ctx.fillStyle = `rgba(255,255,255,${0.12 + 0.05 * i})`;
-      ctx.arc(270 + Math.sin(t * (0.8 + i * 0.3) + i) * 200, 480 + Math.cos(t * (0.6 + i * 0.2) + i) * 360, 40 + i * 12, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 56px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(label, 270, 440);
-    ctx.font = '36px ui-monospace, monospace';
-    ctx.fillText(new Date().toLocaleTimeString(), 270, 520);
-    raf = requestAnimationFrame(draw);
-  };
-  raf = requestAnimationFrame(draw);
-  const stream = canvas.captureStream(30);
-  let audioCtx = null;
-  try {
-    audioCtx = new AudioContext();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.frequency.value = 330;
-    gain.gain.value = 0.03;
-    const dest = audioCtx.createMediaStreamDestination();
-    osc.connect(gain).connect(dest);
-    osc.start();
-    dest.stream.getAudioTracks().forEach((tr) => stream.addTrack(tr));
-  } catch { /* audio optional */ }
-  const stop = stream.getTracks()[0].stop.bind(stream.getTracks()[0]);
-  stream.stopPattern = () => { cancelAnimationFrame(raf); stop(); stream.getTracks().forEach((tr) => tr.stop()); if (audioCtx) audioCtx.close(); };
-  return stream;
-}
-
 export function stopStream(stream) {
   if (!stream) return;
-  if (stream.stopPattern) stream.stopPattern();
-  else stream.getTracks().forEach((t) => t.stop());
+  stream.getTracks().forEach((t) => t.stop());
 }
 
 /** Grab a JPEG still from a <video> element. */

@@ -33,8 +33,6 @@ async function main() {
   const email = (process.env.ADMIN_EMAIL || 'admin@example.com').toLowerCase();
   q.run(`INSERT INTO users (username, email, password_hash, display_name, role, is_owner, is_verified, created_at)
     VALUES (?, ?, ?, ?, 'admin', 1, 1, ?)`, username, email, await hashPassword(pw || 'ChangeMe-Admin1!'), config.appName, now());
-  // placeholder sounds so the upload page has a library
-  execFileSync(process.execPath, [path.join(__dirname, 'make-sounds.js')], { stdio: 'inherit' });
   console.log(`[bootstrap] created owner account @${username} (${email})`);
 }
 

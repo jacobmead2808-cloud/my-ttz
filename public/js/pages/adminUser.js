@@ -64,7 +64,7 @@ export default async function adminUserPage(ctx) {
       avatar(u, 84, { link: false }),
       h('div.dossier-id',
         h('h1', u.displayName || u.username, u.verified ? icon('checkCircle', { size: 18, cls: 'verified' }) : null, u.isOwner ? h('span.owner-badge', 'Owner') : u.role === 'admin' ? h('span.role-badge.admin', 'Admin') : null),
-        h('div.muted', `@${u.username} · ${u.email} · joined ${fullDate(u.createdAt)}`),
+        h('div.muted', `@${u.username} · joined ${fullDate(u.createdAt)}`), h('div.muted.small', 'Account email (staff only): ', h('span', u.email)),
         h('div.row.gap.wrap', pill(u.status), u.suspendedUntil ? h('span.small.muted', `until ${fullDate(u.suspendedUntil)}`) : null,
           u.commentBanned ? h('span.pill.pill-suspended', 'comments restricted') : null, u.liveBanned ? h('span.pill.pill-suspended', 'LIVE restricted') : null,
           u.liveAccess ? h('span.pill.pill-active', 'LIVE granted') : null, u.isPrivate ? h('span.pill', 'private') : null),

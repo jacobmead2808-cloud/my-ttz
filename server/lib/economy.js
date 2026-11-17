@@ -7,20 +7,31 @@ const { q, tx, now } = require('../db');
 const settings = require('./settings');
 const { bad } = require('./errors');
 
-/** Gift catalog. Emoji are placeholders — swap `art` for image URLs later. */
+/**
+ * Gift catalogue: original Clipzy gifts. Artwork lives in public/assets/gifts/<id>.svg.
+ * tier 1-5 sets how big the on-screen effect is; `effect` picks the animation in the viewer.
+ * Ids are permanent (past gift records refer to them); names, art and effects can change.
+ */
+const G = (id, name, coins, category, effect, description) => {
+  const tier = coins <= 10 ? 1 : coins <= 199 ? 2 : coins <= 999 ? 3 : coins <= 4999 ? 4 : 5;
+  return { id, name, coins, tier, category, effect, description, art: `/assets/gifts/${id}.svg` };
+};
 const GIFTS = [
-  { id: 'rose', name: 'Rose', art: '🌹', coins: 1, tier: 1 },
-  { id: 'cloud-heart', name: 'Cloud Heart', art: '💗', coins: 1, tier: 1 },
-  { id: 'sparkle', name: 'Sparkle', art: '✨', coins: 1, tier: 1 },
-  { id: 'kiss', name: 'Air Kiss', art: '💋', coins: 5, tier: 1 },
-  { id: 'gg', name: 'GG', art: '🎮', coins: 10, tier: 1 },
-  { id: 'donut', name: 'Donut', art: '🍩', coins: 30, tier: 2 },
-  { id: 'dice', name: 'Lucky Dice', art: '🎲', coins: 99, tier: 2 },
-  { id: 'disco', name: 'Disco Ball', art: '🪩', coins: 199, tier: 2 },
-  { id: 'crown', name: 'Crown', art: '👑', coins: 499, tier: 3 },
-  { id: 'rocket', name: 'Rocket', art: '🚀', coins: 999, tier: 3 },
-  { id: 'treasure', name: 'Treasure Chest', art: '🧰', coins: 2599, tier: 3 },
-  { id: 'galaxy', name: 'Galaxy', art: '🌌', coins: 9999, tier: 4 },
+  G('rose', 'Petal', 1, 'Classic', 'float', 'A single petal to say hi.'),
+  G('cloud-heart', 'Cloud Heart', 1, 'Classic', 'float', 'A soft heart that drifts up.'),
+  G('sparkle', 'Spark', 1, 'Classic', 'float', 'A quick spark of appreciation.'),
+  G('kiss', 'Wave Hello', 5, 'Classic', 'float', 'Wave at the host.'),
+  G('gg', 'Good Game', 10, 'Classic', 'pop', 'For a great play.'),
+  G('donut', 'Sprinkle Ring', 30, 'Fun', 'pop', 'A sweet treat with sprinkles.'),
+  G('dice', 'Lucky Dice', 99, 'Fun', 'pop', 'Roll for luck.'),
+  G('disco', 'Mirror Ball', 199, 'Fun', 'burst', 'Light up the room.'),
+  G('crown', 'Royal Crown', 499, 'Premium', 'burst', 'Crown the host for the night.'),
+  G('rocket', 'Liftoff', 999, 'Premium', 'burst', 'Send the stream into orbit.'),
+  G('comet', 'Comet Trail', 1999, 'Premium', 'takeover', 'A comet streaks across the screen.'),
+  G('treasure', 'Treasure Chest', 2599, 'Premium', 'takeover', 'Opens with a shower of coins.'),
+  G('aurora', 'Aurora Sky', 4999, 'Legendary', 'takeover', 'Northern lights fill the screen.'),
+  G('galaxy', 'Nebula', 9999, 'Legendary', 'legendary', 'A whole nebula, just for the host.'),
+  G('orbit', 'Clipzy Orbit', 19999, 'Legendary', 'legendary', 'The rarest gift: planets in orbit around the host.'),
 ];
 
 const DEFAULT_ECONOMY = {
@@ -75,22 +86,39 @@ function adjust(userId, { coins = 0, diamonds = 0, type, ref = null, note = null
   });
 }
 
-/** Send `count` of a gift from sender to receiver. Returns { gift, totalCoins, diamonds, senderWallet }. */
-function sendGift({ senderId, receiverId, giftId, count = 1, streamId = null }) {
+const MAX_GIFT_COUNT = 99;
+const GIFT_ALERT_COINS = Number(process.env.GIFT_ALERT_COINS) || 50000;
+
+/**
+ * Send `count` of a gift from sender to receiver. Price and diamonds always come from the server
+ * catalog. `clientRef` (a random id the sender's device makes per tap) makes retries safe: the same
+ * ref is never charged twice. Returns { gift, count, totalCoins, diamonds, senderWallet, duplicate }.
+ */
+function sendGift({ senderId, receiverId, giftId, count = 1, streamId = null, clientRef = null }) {
   const gift = catalog().find((g) => g.id === giftId);
   if (!gift) throw bad('Unknown gift');
   if (!gift.enabled) throw bad('This gift is currently unavailable');
   if (senderId === receiverId) throw bad('You can’t send gifts to yourself');
-  count = Math.min(Math.max(parseInt(count, 10) || 1, 1), 99);
-  const totalCoins = gift.coins * count;
+  const n = Number(count);
+  if (!Number.isInteger(n) || n < 1 || n > MAX_GIFT_COUNT) throw bad(`You can send between 1 and ${MAX_GIFT_COUNT} at a time`);
+  if (clientRef != null && !/^[A-Za-z0-9_-]{8,64}$/.test(String(clientRef))) throw bad('Invalid request id');
+  const totalCoins = gift.coins * n;
   const diamonds = Math.floor(totalCoins * (economy().diamondRate || 0.5));
   return tx(() => {
-    const senderWallet = adjust(senderId, { coins: -totalCoins, type: 'gift_sent', ref: `${giftId}x${count}`, note: streamId ? `LIVE #${streamId}` : null });
-    if (diamonds) adjust(receiverId, { diamonds, type: 'gift_received', ref: `${giftId}x${count}`, note: streamId ? `LIVE #${streamId}` : null });
-    q.run('INSERT INTO gift_events (sender_id, receiver_id, stream_id, gift_id, count, coins, diamonds, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      senderId, receiverId, streamId, giftId, count, totalCoins, diamonds, now());
+    if (clientRef) {
+      const prev = q.get('SELECT * FROM gift_events WHERE sender_id = ? AND client_ref = ?', senderId, String(clientRef));
+      if (prev) return { gift: GIFTS.find((g) => g.id === prev.gift_id), count: prev.count, totalCoins: prev.coins, diamonds: prev.diamonds, senderWallet: wallet(senderId), duplicate: true };
+    }
+    const senderWallet = adjust(senderId, { coins: -totalCoins, type: 'gift_sent', ref: `${giftId}x${n}`, note: streamId ? `LIVE #${streamId}` : null });
+    if (diamonds) adjust(receiverId, { diamonds, type: 'gift_received', ref: `${giftId}x${n}`, note: streamId ? `LIVE #${streamId}` : null });
+    q.run('INSERT INTO gift_events (sender_id, receiver_id, stream_id, gift_id, count, coins, diamonds, client_ref, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      senderId, receiverId, streamId, giftId, n, totalCoins, diamonds, clientRef ? String(clientRef) : null, now());
     if (streamId) q.run('UPDATE live_streams SET diamonds = diamonds + ? WHERE id = ?', diamonds, streamId);
-    return { gift, count, totalCoins, diamonds, senderWallet };
+    const lastHour = q.get('SELECT COALESCE(SUM(coins), 0) AS c FROM gift_events WHERE sender_id = ? AND created_at > ?', senderId, now() - 3600000).c;
+    if (lastHour >= GIFT_ALERT_COINS && lastHour - totalCoins < GIFT_ALERT_COINS) {
+      require('./security').record('gift.velocity', { userId: senderId, path: streamId ? `/live/${streamId}` : null }, `${lastHour} coins of gifts in the last hour`, { severity: 'info' });
+    }
+    return { gift, count: n, totalCoins, diamonds, senderWallet, duplicate: false };
   });
 }
 
@@ -100,4 +128,4 @@ function topGifters(streamId, limit = 5) {
     .map((r) => ({ id: r.id, username: r.username, displayName: r.display_name || r.username, avatarUrl: r.avatar_url, coins: r.coins }));
 }
 
-module.exports = { GIFTS, catalog, packages, priceFor, wallet, adjust, sendGift, topGifters, economy, DEFAULT_ECONOMY };
+module.exports = { MAX_GIFT_COUNT, GIFTS, catalog, packages, priceFor, wallet, adjust, sendGift, topGifters, economy, DEFAULT_ECONOMY };

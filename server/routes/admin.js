@@ -16,7 +16,11 @@ const automod = require('../lib/automod');
 const aiMod = require('../lib/aiMod');
 const eco = require('../lib/economy');
 const { eligibility } = require('../lib/liveRules');
-const VERIFY_KEY = () => process.env.VERIFY_KEY || (config.isProd ? null : 'weluvjj');
+const VERIFY_KEY = () => process.env.VERIFY_KEY || null;
+const keyMatches = (given) => {
+  const a = Buffer.from(String(given || '')); const b = Buffer.from(VERIFY_KEY() || '');
+  return b.length > 0 && a.length === b.length && require('crypto').timingSafeEqual(a, b);
+};
 
 const router = express.Router();
 router.use(requireAdmin); // every admin route is protected server-side
@@ -150,7 +154,7 @@ router.post('/users/:id/flags', (req, res) => {
   if (req.body.verified !== undefined) {
     if (!req.user.is_owner) throw forbidden('Only the platform owner can give or remove verified badges');
     if (!VERIFY_KEY()) throw forbidden('VERIFY_KEY is not set on the server');
-  if (String(req.body.key || '') !== VERIFY_KEY()) throw forbidden('Wrong verification key');
+  if (!keyMatches(req.body.key)) throw forbidden('Wrong verification key');
     const on = v.bool(req.body.verified);
     q.run('UPDATE users SET is_verified = ? WHERE id = ?', on ? 1 : 0, u.id);
     if (on) notify({ userId: u.id, actorId: null, type: 'verified', body: 'Your account is now verified' });
@@ -266,7 +270,7 @@ router.post('/users/:id/assess', async (req, res) => {
 router.post('/users/:id/verify', (req, res) => {
   if (!req.user.is_owner) throw forbidden('Only the platform owner can give or remove verified badges');
   if (!VERIFY_KEY()) throw forbidden('VERIFY_KEY is not set on the server');
-  if (String(req.body.key || '') !== VERIFY_KEY()) throw forbidden('Wrong verification key');
+  if (!keyMatches(req.body.key)) throw forbidden('Wrong verification key');
   const u = q.get('SELECT * FROM users WHERE id = ?', v.int(req.params.id, 'user'));
   if (!u) throw notFound('User not found');
   const on = req.body.verified === undefined ? true : v.bool(req.body.verified);
@@ -641,6 +645,12 @@ router.post('/live/:id/end', (req, res) => {
 router.get('/audit', (_req, res) => {
   const rows = q.all('SELECT a.*, u.username FROM audit_log a LEFT JOIN users u ON u.id = a.admin_id ORDER BY a.id DESC LIMIT 200');
   res.json({ entries: rows.map((r) => ({ id: r.id, admin: r.username, action: r.action, targetType: r.target_type, targetId: r.target_id, note: r.note, createdAt: r.created_at })) });
+});
+
+/** Security monitoring: recent suspicious events and 24-hour counts (no personal data beyond user ids). */
+router.get('/security', (req, res) => {
+  const type = req.query.type ? String(req.query.type).slice(0, 40) : null;
+  res.json(require('../lib/security').list({ type, limit: 200 }));
 });
 
 module.exports = router;

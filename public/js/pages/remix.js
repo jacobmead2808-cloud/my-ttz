@@ -1,4 +1,4 @@
-// Duet & Stitch studio. Composes the original video with your camera / a clip / a test pattern on a
+// Duet & Stitch studio. Composes the original video with your camera or a clip from your device on a
 // canvas and records the result in the browser (MediaRecorder), then hands it to the upload page.
 import { h } from '../lib/dom.js';
 import { icon } from '../lib/icons.js';
@@ -6,7 +6,7 @@ import { api } from '../lib/api.js';
 import { fmtDuration } from '../lib/format.js';
 import { navigate } from '../lib/router.js';
 import { toast, toastError, emptyState } from '../components/ui.js';
-import { testPatternStream, stopStream } from '../lib/livestream.js';
+import { stopStream } from '../lib/livestream.js';
 import { setPendingUpload } from '../lib/pendingUpload.js';
 import { filterCss } from '../lib/videoFx.js';
 
@@ -64,7 +64,7 @@ export default async function remixPage(ctx) {
   const origStart = video.trimStart || 0;
   let stitchLen = 5;
 
-  const status = h('div.remix-status', 'Choose your side: camera, a clip from your device, or a test pattern.');
+  const status = h('div.remix-status', 'Choose your side: your camera or a clip from your device.');
   const timer = h('span.remix-timer', '0:00');
 
   async function useSource(kind) {
@@ -77,12 +77,6 @@ export default async function remixPage(ctx) {
         el.srcObject = stream;
         await el.play();
         source = { kind, el, stream, mirror: true };
-      } else if (kind === 'test') {
-        const stream = testPatternStream('You');
-        const el = h('video', { autoplay: true, playsInline: true, muted: true });
-        el.srcObject = stream;
-        await el.play();
-        source = { kind, el, stream };
       } else {
         const input = h('input', { type: 'file', accept: 'video/*' });
         const f = await new Promise((res) => { input.onchange = () => res(input.files[0]); input.click(); });
@@ -95,7 +89,7 @@ export default async function remixPage(ctx) {
       recBtn.disabled = false;
       paintSources();
     } catch (e) {
-      toastError(e.name === 'NotAllowedError' ? new Error('Camera permission denied — try a clip from your device or the test pattern.') : e);
+      toastError(e.name === 'NotAllowedError' ? new Error('Camera permission denied. Allow camera access, or use a clip from your device.') : e);
     }
   }
 
@@ -203,7 +197,7 @@ export default async function remixPage(ctx) {
 
   const srcBtns = h('div.seg');
   function paintSources() {
-    srcBtns.replaceChildren(...[['camera', 'camera', 'Camera'], ['file', 'upload', 'From device'], ['test', 'sparkles', 'Test pattern']].map(([k, ic, label]) =>
+    srcBtns.replaceChildren(...[['camera', 'camera', 'Camera'], ['file', 'upload', 'From device']].map(([k, ic, label]) =>
       h(`button.seg-btn${source && (source.kind === k) ? '.active' : ''}`, { type: 'button', onclick: () => useSource(k) }, icon(ic, { size: 16 }), ' ', label)));
   }
   paintSources();

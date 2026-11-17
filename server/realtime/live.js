@@ -91,12 +91,12 @@ function settingsPayload(id, room) {
 }
 
 /** Called by REST routes when a gift is sent. */
-function onGift(id, { sender, gift, count, coins, leaders }) {
+function onGift(id, { sender, gift, count, coins, diamonds = 0, leaders }) {
   const room = rooms.get(id);
   if (!room) return;
   room.giftCoins += coins;
-  broadcast(room, { type: 'live:gift', streamId: id, gift: { id: gift.id, name: gift.name, art: gift.art, coins: gift.coins, tier: gift.tier }, count, coins,
-    user: { id: sender.id, username: sender.username, displayName: sender.display_name || sender.username, avatarUrl: sender.avatar_url }, leaders, giftCoins: room.giftCoins });
+  broadcast(room, { type: 'live:gift', streamId: id, gift: { id: gift.id, name: gift.name, art: gift.art, coins: gift.coins, tier: gift.tier, effect: gift.effect, category: gift.category }, count, coins,
+    user: { id: sender.id, username: sender.username, displayName: sender.display_name || sender.username, avatarUrl: sender.avatar_url }, leaders, giftCoins: room.giftCoins, diamonds });
   if (room.goal && room.goal.type === 'gifts') broadcast(room, settingsPayload(id, room));
 }
 
@@ -254,7 +254,7 @@ function handle(ws, msg) {
       if (room.host && room.host !== ws) hub.send(room.host, { type: 'live:replaced', streamId: id });
       room.host = ws;
       ws.liveRooms.add(id);
-      hub.send(ws, { type: 'live:state', streamId: id, viewers: room.viewers.size, likes: room.likes, role: 'host' });
+      hub.send(ws, { type: 'live:state', streamId: id, viewers: room.viewers.size, likes: room.likes, giftCoins: room.giftCoins, role: 'host' });
       hub.send(ws, settingsPayload(id, room));
       for (const peerId of room.viewers.keys()) hub.send(ws, { type: 'live:peer-join', streamId: id, peerId });
       broadcast(room, { type: 'live:host-back', streamId: id }, ws);
@@ -272,7 +272,7 @@ function handle(ws, msg) {
       ws.liveRooms.add(id);
       const role = roleOf(ws.user, room);
       const until = ws.user ? room.mutes.get(ws.user.id) : null;
-      hub.send(ws, { type: 'live:state', streamId: id, viewers: room.viewers.size, likes: room.likes, hostOnline: !!room.host, role, mutedUntil: until && until > Date.now() ? (until === Infinity ? -1 : until) : null });
+      hub.send(ws, { type: 'live:state', streamId: id, viewers: room.viewers.size, likes: room.likes, giftCoins: room.giftCoins, hostOnline: !!room.host, role, mutedUntil: until && until > Date.now() ? (until === Infinity ? -1 : until) : null });
       hub.send(ws, settingsPayload(id, room));
       hub.send(room.host, { type: 'live:peer-join', streamId: id, peerId: ws.connId });
       broadcastViewers(id, room);

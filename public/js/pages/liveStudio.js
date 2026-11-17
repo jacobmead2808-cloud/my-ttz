@@ -1,5 +1,5 @@
 // Clipzy LIVE Studio: eligibility gate (500+ followers / verified / good standing / trial), scene
-// composer (camera, screen, screen + camera, test pattern) with on-screen text, goals, and a live
+// composer (camera, screen, screen + camera) with on-screen text, goals, and a live
 // dashboard with stats, gift feed, top gifters and moderation.
 import { h } from '../lib/dom.js';
 import { icon } from '../lib/icons.js';
@@ -10,7 +10,7 @@ import { fmtCount, fmtDuration } from '../lib/format.js';
 import { navigate } from '../lib/router.js';
 import { toast, toastError, confirmDialog, avatar } from '../components/ui.js';
 import { liveRoom } from '../components/liveRoom.js';
-import { createBroadcaster, testPatternStream, stopStream } from '../lib/livestream.js';
+import { createBroadcaster, stopStream } from '../lib/livestream.js';
 import { coinIcon } from '../components/coins.js';
 
 const SIZES = { portrait: [720, 1280], landscape: [1280, 720] };
@@ -144,7 +144,7 @@ export default async function liveStudio() {
         const at = cam && cam.getAudioTracks()[0];
         opts('videoinput', camSel, camId || (vt && vt.getSettings().deviceId));
         opts('audioinput', micSel, micId || (at && at.getSettings().deviceId));
-        devicesRow.classList.toggle('hidden', !cam || cam.stopPattern);
+        devicesRow.classList.toggle('hidden', !cam);
       } catch { /* ignore */ }
     }
     camSel.addEventListener('change', async () => { camId = camSel.value; try { await getCam(true); if (live) rebuildAudio(); paintReady(); } catch (e) { toastError(e); } });
@@ -153,18 +153,14 @@ export default async function liveStudio() {
     async function useScene(k) {
       errorEl.classList.add('hidden');
       try {
-        if (k === 'test') {
-          if (cam) stopStream(cam);
-          cam = testPatternStream(`@${store.me.username}`);
-          camEl.srcObject = cam;
-        } else {
-          if (!navigator.mediaDevices) throw new Error('Camera access needs https or localhost.');
-          if (k === 'camera' || k === 'pip') { if (cam && cam.stopPattern) { stopStream(cam); cam = null; } await getCam(); }
+        {
+          if (!navigator.mediaDevices) throw new Error('Camera access needs a secure (https) connection.');
+          if (k === 'camera' || k === 'pip') await getCam();
           if (k === 'screen' || k === 'pip') {
             if (!screen) {
               screen = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: true });
               screenEl.srcObject = screen;
-              screen.getVideoTracks()[0].addEventListener('ended', () => { screen = null; if (scene === 'screen' || scene === 'pip') { toast('Screen sharing stopped'); scene = cam ? 'camera' : 'test'; paintScenes(); } });
+              screen.getVideoTracks()[0].addEventListener('ended', () => { screen = null; if (scene === 'screen' || scene === 'pip') { toast('Screen sharing stopped'); scene = cam ? 'camera' : null; paintScenes(); } });
             }
             if (k === 'pip' || !cam) orientation = 'landscape';
           }
@@ -201,7 +197,7 @@ export default async function liveStudio() {
 
     const sceneBtns = h('div.scene-grid');
     function paintScenes() {
-      sceneBtns.replaceChildren(...[['camera', 'camera', 'Camera'], ['screen', 'monitor', 'Screen'], ['pip', 'video', 'Screen + camera'], ['test', 'sparkles', 'Test pattern']].map(([k, ic, label]) =>
+      sceneBtns.replaceChildren(...[['camera', 'camera', 'Camera'], ['screen', 'monitor', 'Screen'], ['pip', 'video', 'Screen + camera']].map(([k, ic, label]) =>
         h(`button.scene-btn${scene === k && (cam || screen) ? '.active' : ''}`, { type: 'button', onclick: () => useScene(k) }, icon(ic, { size: 20 }), h('span', label))));
       orientBtns.replaceChildren(...['portrait', 'landscape'].map((o) => h(`button.seg-btn${orientation === o ? '.active' : ''}`, { type: 'button', onclick: () => { orientation = o; paintScenes(); } }, o === 'portrait' ? 'Vertical 9:16' : 'Horizontal 16:9')));
     }
@@ -224,6 +220,7 @@ export default async function liveStudio() {
     const statLikes = h('b', '0');
     const statGifts = h('b', '0');
     const statDiamonds = h('b', '0');
+    let diamondsLive = 0;
     const statFollowers = h('b', '0');
     const giftFeed = h('div.gift-feed', h('p.muted.small', 'Gifts will appear here.'));
     const leadersList = h('div.leader-list', h('p.muted.small', 'No gifters yet.'));
@@ -244,7 +241,7 @@ export default async function liveStudio() {
       const hasVideo = !!(v && v.readyState === 'live') || !!screen;
       const item = (ok, label, hint) => h(`div.ready-item${ok ? '.ok' : ''}`, h('span.ready-dot', ok ? icon('check', { size: 12 }) : ''), h('span', label), h('span.muted.small', hint));
       ready.replaceChildren(
-        item(hasVideo, 'Video', hasVideo ? (screen ? 'Screen' : cam && cam.stopPattern ? 'Test pattern' : 'Camera on') : 'Not on yet'),
+        item(hasVideo, 'Video', hasVideo ? (screen ? 'Screen' : 'Camera on') : 'Not on yet'),
         item(!!(a && a.readyState === 'live'), 'Microphone', a ? (a.enabled ? 'On' : 'Muted') : 'Not on yet'),
         item(ws.connected, 'Connection', ws.connected ? 'Good' : 'Connecting…'));
       emptyStage.classList.toggle('hidden', hasVideo);
@@ -265,8 +262,7 @@ export default async function liveStudio() {
     const emptyStage = h('div.stage-empty',
       h('button.btn.btn-primary.btn-lg', { type: 'button', onclick: () => useScene('camera') }, icon('camera', { size: 20 }), ' Turn on camera'),
       h('div.row.gap.center',
-        h('button.btn.btn-secondary.btn-sm', { type: 'button', onclick: () => useScene('screen') }, icon('monitor', { size: 14 }), ' Share screen'),
-        h('button.btn.btn-ghost.btn-sm', { type: 'button', onclick: () => useScene('test') }, 'Test pattern')),
+        h('button.btn.btn-secondary.btn-sm', { type: 'button', onclick: () => useScene('screen') }, icon('monitor', { size: 14 }), ' Share screen')),
       h('p.small', 'Your browser will ask for permission — choose Allow.'));
 
     const dashPanel = h('aside.studio-panel.dash.hidden',
@@ -304,12 +300,14 @@ export default async function liveStudio() {
         startedAt = Date.now();
         const out = buildOutput();
         const broadcaster = createBroadcaster(s.id, () => out);
-        const room = liveRoom(s.id, { isHost: true, onGift: (m) => {
+        const room = liveRoom(s.id, { isHost: true, hostName: store.me.displayName, startedAt, gifts: [], onGift: (m) => {
           giftCoins = m.giftCoins;
           statGifts.textContent = fmtCount(giftCoins);
+          diamondsLive += m.diamonds || 0;
+          statDiamonds.textContent = fmtCount(diamondsLive);
           if (giftFeed.querySelector('p')) giftFeed.replaceChildren();
           giftFeed.prepend(h('div.gift-feed-row', avatar({ username: m.user.username, avatarUrl: m.user.avatarUrl }, 28, { link: false }),
-            h('span', h('b', m.user.displayName), ` sent ${m.gift.art} ${m.gift.name}${m.count > 1 ? ` ×${m.count}` : ''}`), h('span.muted.small', coinIcon(12), ` ${fmtCount(m.coins)}`)));
+            h('span', h('b', m.user.displayName), ` sent ${m.gift.name}${m.count > 1 ? ` ×${m.count}` : ''}`), h('img.gift-feed-art', { src: m.gift.art, alt: '' }), h('span.muted.small', coinIcon(12), ` ${fmtCount(m.coins)}`)));
           leadersList.replaceChildren(...m.leaders.map((u, i) => h('div.leader-row', h('span.rank', `#${i + 1}`), avatar({ username: u.username, avatarUrl: u.avatarUrl }, 28, { link: false }), h('span', u.displayName), h('b', coinIcon(12), ` ${fmtCount(u.coins)}`))));
         } });
         roomSlot.replaceChildren(room.el);
@@ -340,7 +338,8 @@ export default async function liveStudio() {
             const b = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.75));
             if (b && live) { const fd = new FormData(); fd.append('preview', b, 'preview.jpg'); api.upload(`/live/${s.id}/preview`, fd).promise.catch(() => {}); }
             const { stream: info } = await api.get(`/live/${s.id}`);
-            statDiamonds.textContent = fmtCount(info.diamonds || 0);
+            diamondsLive = Math.max(diamondsLive, info.diamonds || 0);
+            statDiamonds.textContent = fmtCount(diamondsLive);
             statFollowers.textContent = fmtCount(info.newFollowers || 0);
           } catch { /* ignore */ }
         };

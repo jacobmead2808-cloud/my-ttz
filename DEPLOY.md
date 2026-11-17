@@ -67,7 +67,7 @@ set `REQUIRE_EMAIL_VERIFICATION=false` temporarily, and remove it once email wor
 | `FIREBASE_SERVICE_ACCOUNT` | push notifications in the Android app (see APPS.md); browser push needs nothing | for Android push |
 
 Already set by the Dockerfile: `NODE_ENV=production`, `DATA_DIR=/data/db`, `UPLOAD_DIR=/data/uploads`,
-`TRUST_PROXY=1`, `PORT=4000`. Never set `SEED_DEMO` or `COINS_DEMO_MODE` in production (both are ignored).
+`TRUST_PROXY=1`, `PORT=4000`. `SEED_DEMO` is ignored in production. There is no demo-coins mode.
 
 Generate a random `VERIFY_KEY` locally with:
 ```bash
@@ -113,7 +113,7 @@ such as LiveKit; this is not built yet (see AUDIT.md).
 1. stripe.com → complete business verification.
 2. Developers → API keys → copy the **secret key** into `STRIPE_SECRET_KEY`.
 3. Developers → Webhooks → Add endpoint `https://yourdomain.com/api/coins/webhook`, event
-   `checkout.session.completed` → copy the **signing secret** into `STRIPE_WEBHOOK_SECRET`.
+   events `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `checkout.session.expired`, `charge.refunded`, `charge.dispute.created` → copy the **signing secret** into `STRIPE_WEBHOOK_SECRET`.
 4. Test with `sk_test_` keys and card `4242 4242 4242 4242` first, then switch to live keys.
 
 Without Stripe keys, coin purchases are simply turned off in production.

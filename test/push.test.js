@@ -96,7 +96,7 @@ const bob = client();
 
 test('setup', async () => {
   for (const [c, n] of [[alice, 'alice'], [bob, 'bob']]) {
-    const r = await c.post('/api/auth/register', { email: `${n}@t.dev`, username: n, password: 'password1', birthDate: '2000-01-01', acceptTerms: true });
+    const r = await c.post('/api/auth/register', { email: `${n}@t.dev`, username: n, password: 'Test-pass-91', birthDate: '2000-01-01', acceptTerms: true });
     assert.equal(r.status, 201);
   }
 });

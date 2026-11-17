@@ -34,8 +34,8 @@ const rand = (n) => Math.floor(Math.random() * n);
 const pick = (arr) => arr[rand(arr.length)];
 
 // ---------- Placeholder avatars (SVG with initials) ----------
-const COLORS = [['#ff0050', '#ff7a00'], ['#00f2ea', '#0077ff'], ['#0f766e', '#14b8a6'], ['#00c853', '#64dd17'], ['#ff6d00', '#ffd600'],
-  ['#2962ff', '#00b8d4'], ['#b91c1c', '#f97316'], ['#00bfa5', '#1de9b6'], ['#ff1744', '#ff9100'], ['#1d4ed8', '#0ea5e9']];
+const COLORS = [['#334155', '#475569'], ['#1e3a5f', '#2b5283'], ['#3f3f46', '#52525b'], ['#1f4d4a', '#2c6662'], ['#44403c', '#57534e'],
+  ['#1e40af', '#2563eb'], ['#374151', '#4b5563'], ['#164e63', '#155e75'], ['#3b3b4f', '#4a4a63'], ['#1f2937', '#374151']];
 function avatarSvg(name, i) {
   const [a, b] = COLORS[i % COLORS.length];
   const initials = name.replace(/[^a-z]/gi, '').slice(0, 2).toUpperCase() || '?';

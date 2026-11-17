@@ -57,7 +57,7 @@ STUN-only WebRTC works on most home networks and on localhost. For reliability y
 ## Coins, gifts & LIVE
 * **Coins** — `/coins` wallet + Recharge sheet (packs 30–1,000 or custom). With `STRIPE_SECRET_KEY` and
   `STRIPE_WEBHOOK_SECRET` set, purchases go through Stripe Checkout (webhook: `/api/coins/webhook`, event
-  `checkout.session.completed`). Without them, development builds hand out **demo coins** (no money moves).
+  `checkout.session.completed` and the refund/failure events listed in `.env.example`). Without them, buying coins is switched off; there is no demo mode.
   Untested against a live Stripe account.
 * **Gifts** — 12 placeholder gifts (emoji art in `server/lib/economy.js`) sent from the LIVE gift bar; creators earn
   diamonds (default 50%) they can exchange for coins. Gift gallery on every profile (🎁). Cash-out needs a payout

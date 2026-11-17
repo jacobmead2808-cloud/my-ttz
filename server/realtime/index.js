@@ -31,6 +31,8 @@ function attach(server) {
     const user = userFromRequest(req);
     wss.handleUpgrade(req, socket, head, (ws) => {
       ws.user = user;
+      const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+      ws.ip = (require('../config').trustProxy && fwd) || req.socket.remoteAddress;
       ws.connId = crypto.randomBytes(8).toString('hex');
       ws.isAlive = true;
       wss.emit('connection', ws, req);
@@ -42,7 +44,10 @@ function attach(server) {
     hub.send(ws, { type: 'hello', connId: ws.connId, userId: ws.user ? ws.user.id : null });
     ws.on('pong', () => { ws.isAlive = true; });
     ws.on('message', (raw) => {
-      if (!wsLimit(ws.connId)) return; // drop floods (max 150 messages / 10s per connection)
+      if (!wsLimit(ws.connId)) { // drop floods (max 150 messages / 10s per connection)
+        if (!ws.floodLogged) { ws.floodLogged = true; require('../lib/security').record('ws.flood', { ip: ws.ip, userId: ws.user && ws.user.id, path: '/ws' }, 'over 150 messages in 10s'); }
+        return;
+      }
       let msg;
       try { msg = JSON.parse(raw.toString()); } catch { return; }
       if (!msg || typeof msg.type !== 'string') return;

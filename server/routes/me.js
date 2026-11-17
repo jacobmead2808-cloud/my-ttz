@@ -256,4 +256,37 @@ router.delete('/live-bans/:userId', (req, res) => {
 });
 
 module.exports = router;
+/**
+ * Download everything Clipzy holds about you (UK GDPR Article 15 / 20). Passwords, session tokens
+ * and other people's private data are never included.
+ */
+const exportLimit = require('../lib/rateLimit').limit({ windowMs: 86400000, max: 5, key: (req) => `export:${req.user.id}`, message: 'You can download your data 5 times a day.' });
+router.get('/export', exportLimit, (req, res) => {
+  const id = req.user.id;
+  const u = q.get('SELECT * FROM users WHERE id = ?', id);
+  const pick = (row, keys) => Object.fromEntries(keys.filter((k) => k in row).map((k) => [k, row[k]]));
+  const data = {
+    exportedAt: new Date().toISOString(),
+    service: config.appName,
+    account: pick(u, ['id', 'username', 'email', 'email_verified', 'display_name', 'bio', 'birth_date', 'avatar_url', 'role', 'is_private', 'allow_messages', 'allow_comments', 'show_liked', 'status', 'created_at', 'terms_accepted_at']),
+    videos: q.all('SELECT id, caption, description, visibility, status, is_draft, views, share_count, created_at FROM videos WHERE user_id = ?', id),
+    comments: q.all('SELECT id, video_id, body, created_at FROM comments WHERE user_id = ?', id),
+    likes: q.all('SELECT video_id, created_at FROM likes WHERE user_id = ?', id),
+    following: q.all('SELECT u.username, f.status, f.created_at FROM follows f JOIN users u ON u.id = f.followee_id WHERE f.follower_id = ?', id),
+    followers: q.all('SELECT u.username, f.status, f.created_at FROM follows f JOIN users u ON u.id = f.follower_id WHERE f.followee_id = ?', id),
+    messagesSent: q.all('SELECT conversation_id, body, video_id, created_at FROM messages WHERE sender_id = ?', id),
+    wallet: q.get('SELECT coins, diamonds FROM wallets WHERE user_id = ?', id) || { coins: 0, diamonds: 0 },
+    coinTransactions: q.all('SELECT type, coins, diamonds, ref, note, created_at FROM coin_transactions WHERE user_id = ?', id),
+    coinOrders: q.all('SELECT id, coins, price_cents, currency, status, created_at, paid_at FROM coin_orders WHERE user_id = ?', id),
+    giftsSent: q.all('SELECT receiver_id, stream_id, gift_id, count, coins, created_at FROM gift_events WHERE sender_id = ?', id),
+    giftsReceived: q.all('SELECT stream_id, gift_id, count, coins, diamonds, created_at FROM gift_events WHERE receiver_id = ?', id),
+    liveStreams: q.all('SELECT id, title, status, started_at, ended_at, peak_viewers, total_likes, diamonds FROM live_streams WHERE user_id = ?', id),
+    reportsMade: q.all('SELECT target_type, target_id, reason, status, created_at FROM reports WHERE reporter_id = ?', id),
+    sessions: q.all('SELECT user_agent, created_at, expires_at FROM sessions WHERE user_id = ?', id),
+    notifications: q.all('SELECT type, actor_id, video_id, body, created_at FROM notifications WHERE user_id = ? ORDER BY id DESC LIMIT 1000', id),
+  };
+  res.setHeader('Content-Disposition', `attachment; filename="clipzy-data-${u.username}.json"`);
+  res.type('application/json').send(JSON.stringify(data, null, 2));
+});
+
 module.exports.meJson = meJson;

@@ -48,10 +48,18 @@ function email(v) {
   return v;
 }
 
+// The most common passwords seen in breaches (letters+digits variants that pass the basic rules).
+const COMMON_PASSWORDS = new Set(['password1', 'password12', 'password123', 'passw0rd', 'passw0rd1', 'qwerty123', 'qwerty1', 'abc12345', 'abcd1234',
+  'iloveyou1', 'welcome1', 'welcome123', 'letmein1', 'monkey123', 'dragon123', 'football1', 'baseball1', 'sunshine1', 'princess1',
+  'admin123', 'admin1234', 'login123', 'master123', 'hello123', 'charlie1', 'trustno1', 'superman1', 'batman123', 'starwars1',
+  '1q2w3e4r', '1qaz2wsx', 'zaq12wsx', 'q1w2e3r4', 'a1b2c3d4', 'test1234', 'changeme1', 'secret123', 'p4ssword', 'pa55word',
+  'clipzy123', 'clipzy1234', 'tiktok123', 'qwertyuiop1', 'asdfgh123', 'loveyou1', 'freedom1', 'computer1', 'whatever1', 'shadow123']);
+
 function password(v) {
   if (typeof v !== 'string' || v.length < 8) throw bad('Password must be at least 8 characters');
   if (v.length > 200) throw bad('Password is too long');
   if (!/[a-zA-Z]/.test(v) || !/[0-9]/.test(v)) throw bad('Password must contain at least one letter and one number');
+  if (COMMON_PASSWORDS.has(v.toLowerCase())) throw bad('That password is too common. Please choose something harder to guess.');
   return v;
 }
 

@@ -134,9 +134,11 @@ router.post('/:id/gift', requireAuth, accounts.requireVerified, giftLimit, (req,
   accounts.requireAdult(req.user, 'send gifts');
   const s = getStream(v.int(req.params.id, 'stream'));
   if (!s || s.status !== 'live' || !canWatch(req.user, s)) throw notFound('This LIVE has ended');
-  const out = eco.sendGift({ senderId: req.user.id, receiverId: s.user_id, giftId: String(req.body.giftId || ''), count: req.body.count, streamId: s.id });
-  const leaders = eco.topGifters(s.id);
-  liveRt.onGift(s.id, { sender: req.user, gift: out.gift, count: out.count, coins: out.totalCoins, leaders });
+  const out = eco.sendGift({ senderId: req.user.id, receiverId: s.user_id, giftId: String(req.body.giftId || ''), count: req.body.count ?? 1, streamId: s.id, clientRef: req.body.clientRef || null });
+  if (!out.duplicate) {
+    const leaders = eco.topGifters(s.id);
+    liveRt.onGift(s.id, { sender: req.user, gift: out.gift, count: out.count, coins: out.totalCoins, diamonds: out.diamonds, leaders });
+  }
   res.json({ wallet: out.senderWallet, sent: { giftId: out.gift.id, count: out.count, coins: out.totalCoins } });
 });
 

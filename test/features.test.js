@@ -55,7 +55,7 @@ const cat = client();
 let original;
 
 test('setup', async () => {
-  for (const [c, n] of [[ana, 'ana'], [ben, 'ben'], [cat, 'cat']]) await c.post('/api/auth/register', { email: `${n}@t.dev`, username: n, password: 'password1', birthDate: '2000-01-01', acceptTerms: true });
+  for (const [c, n] of [[ana, 'ana'], [ben, 'ben'], [cat, 'cat']]) await c.post('/api/auth/register', { email: `${n}@t.dev`, username: n, password: 'Test-pass-91', birthDate: '2000-01-01', acceptTerms: true });
   await ben.post('/api/users/ana/follow');
   await cat.post('/api/users/ben/follow');
   original = (await upload(ana, { caption: 'original #dance' })).body.video;

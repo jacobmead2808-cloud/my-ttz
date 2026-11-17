@@ -82,9 +82,9 @@ export default async function profilePage(ctx) {
   if (user.isSelf) {
     buttons.append(
       h('button.btn.btn-primary', { onclick: () => editProfileModal(() => navigate(`/@${store.me.username}`, { replace: true })) }, 'Edit profile'),
-      h('a.btn.btn-secondary', { href: '/live/studio' }, icon('live', { size: 16 }), ' Go LIVE'),
-      h('a.btn.btn-secondary', { href: '/analytics' }, icon('chart', { size: 16 }), ' Analytics'),
-      h('button.btn.btn-secondary', { onclick: () => addStory(() => navigate(location.pathname, { replace: true })) }, icon('plus', { size: 16 }), ' Story'),
+      h('a.btn.btn-secondary.collapse-sm', { href: '/live/studio', 'aria-label': 'Go LIVE' }, icon('live', { size: 16 }), h('span.btn-label', 'Go LIVE')),
+      h('a.btn.btn-secondary.collapse-sm', { href: '/analytics', 'aria-label': 'Analytics' }, icon('chart', { size: 16 }), h('span.btn-label', 'Analytics')),
+      h('button.btn.btn-secondary.collapse-sm', { 'aria-label': 'Add story', onclick: () => addStory(() => navigate(location.pathname, { replace: true })) }, icon('plus', { size: 16 }), h('span.btn-label', 'Story')),
       h('a.btn.btn-secondary.icon-only', { href: '/settings', 'aria-label': 'Settings' }, icon('settings', { size: 18 })));
   } else if (rel && rel.blockedByYou) {
     buttons.append(h('button.btn.btn-secondary', { onclick: async () => {

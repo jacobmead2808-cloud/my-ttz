@@ -45,7 +45,7 @@ export function openRecharge({ onDone, need = 0 } = {}) {
       const buyBtn = h('button.btn.btn-primary.btn-lg.btn-block.buy-btn');
       const paintBuy = () => {
         const cents = custom ? Math.max(1, Math.round(custom * info.centsPerCoin * (1 - (info.discount ? info.discount.percent : 0) / 100))) : selected.priceCents;
-        buyBtn.replaceChildren(icon('shield', { size: 18 }), ` ${info.paymentMode === 'demo' ? 'Get' : 'Buy for'} ${info.paymentMode === 'demo' ? `${fmtCount(custom || selected.coins)} demo coins` : money(cents, info.currency)}`);
+        buyBtn.replaceChildren(icon('shield', { size: 18 }), ` Buy for ${money(cents, info.currency)}`);
         buyBtn.disabled = inApp || info.paymentMode === 'disabled' || (custom !== null && (custom < 30 || custom > 250000));
       };
       const grid = h('div.pkg-grid');
@@ -62,11 +62,8 @@ export function openRecharge({ onDone, need = 0 } = {}) {
         buyBtn.disabled = true;
         try {
           const r = await api.post('/coins/checkout', { coins: custom || selected.coins });
-          if (r.url) { location.href = r.url; return; }
-          setWallet(r.wallet);
-          toast(r.message || 'Coins added', { type: 'success' });
-          close();
-          onDone && onDone(r.wallet);
+          // Coins are added only after Stripe confirms the payment to our server.
+          location.href = r.url;
         } catch (e) { toastError(e); paintBuy(); }
       });
       const w = info.wallet;
@@ -74,9 +71,8 @@ export function openRecharge({ onDone, need = 0 } = {}) {
         h('div.recharge-head', h('div', h('h3', 'Recharge'), h('div.muted.small', 'Balance: ', coinIcon(14), ` ${fmtCount(w.coins)} coins`)),
           h('a.link.small', { href: '/coins', onclick: () => close() }, 'Open wallet ', icon('chevronRight', { size: 12 }))),
         info.discount ? h('div.recharge-sale', `${info.discount.label || 'Sale'}: save ${info.discount.percent}% on every pack`) : null,
-        info.paymentMode === 'demo' ? h('div.recharge-demo', icon('alert', { size: 14 }), ' Demo mode — no real payments are taken. Configure Stripe to sell coins.') : null,
-        info.paymentMode === 'disabled' ? h('div.form-error', 'Coin purchases aren’t set up on this server yet.') : null,
-        inApp ? h('div.recharge-demo', icon('alert', { size: 14 }), ' Coins can’t be bought inside the Android app. Your balance and gifts work as normal.') : null,
+        info.paymentMode === 'disabled' ? h('div.recharge-note', icon('alert', { size: 14 }), ' Buying coins isn’t available yet. Your balance and gifts still work.') : null,
+        inApp ? h('div.recharge-note', icon('alert', { size: 14 }), ' Coins can’t be bought inside the Android app. Your balance and gifts work as normal.') : null,
         grid, customInput,
         w.diamonds ? h('button.recharge-row', { type: 'button', onclick: async () => {
           try { const r = await api.post('/coins/exchange', { diamonds: w.diamonds }); setWallet(r.wallet); toast(`Exchanged ${w.diamonds} diamonds for coins`, { type: 'success' }); close(); } catch (e) { toastError(e); }
@@ -95,7 +91,7 @@ export function openGiftGallery(username) {
     api.get(`/coins/gallery/${encodeURIComponent(username)}`).then((g) => {
       box.replaceChildren(
         h('div.gallery-head', h('b', `${g.collected}/${g.total} gifts collected`), h('div.gallery-bar', h('div', { style: { width: `${(g.collected / g.total) * 100}%` } }))),
-        h('div.gallery-grid', g.gifts.map((x) => h(`div.gallery-item${x.received ? '' : '.locked'}`, h('span.gift-art', x.art), h('b', x.name),
+        h('div.gallery-grid', g.gifts.map((x) => h(`div.gallery-item${x.received ? '' : '.locked'}`, h('img.gift-art', { src: x.art, alt: '' }), h('b', x.name),
           h('span.small', x.received ? `×${fmtCount(x.received)}` : 'Not yet'), h('span.muted.small', coinIcon(12), ` ${fmtCount(x.coins)}`)))),
         g.supporters.length ? h('div', h('h4.share-sub', 'Top supporters'), h('div.user-list', g.supporters.map((u, i) => h('a.user-row', { href: `/@${u.username}` },
           h('span.rank', `#${i + 1}`), avatar(u, 36, { link: false }), h('div.user-row-text', h('div.user-row-name', u.displayName), h('div.user-row-sub.muted', `${fmtCount(u.coins)} coins gifted`)))))) : h('p.muted.small', 'No gifts yet — send one in their next LIVE!'));

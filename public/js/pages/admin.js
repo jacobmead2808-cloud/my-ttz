@@ -67,7 +67,7 @@ export default function adminPage(ctx) {
       list.length ? h('div.user-cards', list.map((u) => h('a.user-card', { href: `/admin/user/${u.id}` },
         avatar(u, 44, { link: false }),
         h('div.user-card-main', h('b', u.displayName || u.username, u.verified ? icon('checkCircle', { size: 13, cls: 'verified' }) : null, u.isOwner ? h('span.owner-badge', 'Owner') : u.role === 'admin' ? h('span.role-badge.admin', 'Admin') : null),
-          h('span.muted.small', `@${u.username} · ${u.email}`)),
+          h('span.muted.small', `@${u.username}`)),
         h('div.user-card-meta', STATUS_PILL(u.status), u.reports ? h('span.pill.pill-danger', `${u.reports} reports`) : null,
           h('span.muted.small', `${fmtCount(u.videos)} videos · ${fmtCount(u.followers)} followers · joined ${timeAgo(u.createdAt)}`)),
         icon('chevronRight', { size: 18 })))) : emptyState({ iconName: 'users', title: 'No users found' }));
@@ -149,7 +149,7 @@ export default function adminPage(ctx) {
         h('div.stat-card', icon('heart', { size: 20 }), h('b', fmtCount(e.stats.giftsSent7d)), h('span.muted', 'Gifts sent (7d)')),
         h('div.stat-card', icon('live', { size: 20 }), h('b', fmtCount(e.stats.coinsGifted7d)), h('span.muted', 'Coins gifted (7d)'))),
       h('section.settings-card', h('h2', 'Payments'),
-        h('p', e.paymentMode === 'stripe' ? 'Stripe is connected — purchases charge real money.' : e.paymentMode === 'demo' ? ' Demo mode — coins are free test credits. Add STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET to sell real coins.' : ' Purchases disabled (production without Stripe).')),
+        h('p', e.paymentMode === 'stripe' ? 'Stripe is connected. Purchases charge real money and coins are added only after Stripe confirms payment.' : 'Coin purchases are off. Set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET on the server to sell coins.')),
       h('section.settings-card', h('h2', 'Coin discount'),
         h('div.setting-row', h('div', h('div.setting-title', 'Discount on every coin pack (%)'), h('div.muted.small', 'Shown in the Recharge sheet. 0 = no sale.')), disc),
         discLabel,
@@ -168,7 +168,7 @@ export default function adminPage(ctx) {
             if (ev.target.checked) off.delete(g.id); else off.add(g.id);
             save({ disabledGifts: [...off] }, 'Gift updated');
           } }),
-          h('span.gift-art', g.art), h('b', g.name), h('span.muted.small', coinIcon(12), ` ${fmtCount(g.coins)}`))))));
+          h('img.gift-art', { src: g.art, alt: '' }), h('b', g.name), h('span.muted.small', coinIcon(12), ` ${fmtCount(g.coins)}`))))));
   }
 
   let videoQuery = '';
@@ -327,7 +327,18 @@ export default function adminPage(ctx) {
         } }, icon('send', { size: 16 }), ' Send announcement'))));
   }
 
-  const views = { overview, cases, reports: () => reports(), users, videos, comments, live, automod: automodView, economy: economyView, platform: platformView, audit };
+  async function securityView() {
+    const r = await api.get('/admin/security');
+    const LABEL = { 'login.failed': 'Failed log-ins', 'csrf.blocked': 'Blocked forged requests', 'ratelimit.hit': 'Rate limits hit', 'access.denied': 'Staff areas refused',
+      'webhook.forged': 'Forged payment webhooks', 'gift.velocity': 'Unusual gifting', 'ws.flood': 'Socket floods' };
+    return h('div.stack',
+      h('p.muted.small', 'Suspicious activity from the last 30 days. Sources are shown as anonymised keys; no passwords, tokens or emails are stored.'),
+      h('div.stat-grid', (r.last24h.length ? r.last24h : [{ type: 'none', n: 0 }]).map((c) => h('div.stat-card', h('b', String(c.n)), h('span.muted', c.type === 'none' ? 'Events in 24 hours' : `${LABEL[c.type] || c.type} (24h)`)))),
+      r.events.length ? h('div.table-wrap', h('table.admin-table', h('thead', h('tr', ['When', 'Event', 'Account', 'Source', 'Where', 'Detail'].map((t) => h('th', t)))),
+        h('tbody', r.events.map((e) => h('tr', h('td', fullDate(e.createdAt)), h('td', LABEL[e.type] || e.type), h('td', e.userId ? h('a.link', { href: `/admin/user/${e.userId}` }, `#${e.userId}`) : '—'),
+          h('td', h('code', e.source || '—')), h('td', e.path || '—'), h('td', e.detail || '')))))) : emptyState({ iconName: 'shield', title: 'Nothing suspicious', text: 'No security events recorded.' }));
+  }
+  const views = { overview, cases, reports: () => reports(), users, videos, comments, live, automod: automodView, economy: economyView, platform: platformView, audit, security: securityView };
   async function show(k) {
     tab = k;
     history.replaceState({}, '', `/admin?tab=${k}`);
@@ -339,7 +350,7 @@ export default function adminPage(ctx) {
     { value: 'overview', label: 'Overview', icon: 'chart' }, { value: 'cases', label: 'Cases', icon: 'shield' }, { value: 'reports', label: 'Reports', icon: 'flag' }, { value: 'users', label: 'Users', icon: 'users' },
     { value: 'videos', label: 'Videos', icon: 'film' }, { value: 'comments', label: 'Comments', icon: 'comment' }, { value: 'live', label: 'LIVE', icon: 'live' },
     { value: 'automod', label: 'Auto-mod', icon: 'alert' }, { value: 'economy', label: 'Coins & gifts', icon: 'sparkles' }, { value: 'platform', label: store.me.isOwner ? 'Owner' : 'Platform', icon: 'settings' },
-    { value: 'audit', label: 'Audit log', icon: 'eye' },
+    { value: 'audit', label: 'Audit log', icon: 'eye' }, { value: 'security', label: 'Security', icon: 'lock' },
   ], tab, show, 'scroll-tabs');
   show(views[tab] ? tab : 'overview');
   return { el: h('div.admin-page', h('h1.page-title', icon('shield', { size: 28 }), ' Moderation centre'), bar, body), title: 'Admin' };

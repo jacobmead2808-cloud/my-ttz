@@ -14,6 +14,8 @@ const automod = require('../lib/automod');
 const accounts = require('../lib/accounts');
 
 const router = express.Router();
+// Same cost as a real check, so response time doesn't reveal whether an account exists.
+const DUMMY_HASH = 'scrypt$32768$8$3$AAAAAAAAAAAAAAAAAAAAAA==$' + 'A'.repeat(86);
 
 const loginLimit = limit({ windowMs: 15 * 60 * 1000, max: 20, key: (req) => `login:${req.ip}`, message: 'Too many login attempts. Try again in a few minutes.' });
 const registerLimit = limit({ windowMs: 60 * 60 * 1000, max: 15, key: (req) => `reg:${req.ip}`, message: 'Too many sign-ups from this network. Try again later.' });
@@ -64,8 +66,12 @@ router.post('/login', loginLimit, accountLimit, async (req, res) => {
   if (!password) throw bad('Password is required');
   const user = q.get('SELECT * FROM users WHERE email = ? OR username = ?', login, login);
   // Always run a hash comparison so response time does not reveal whether the account exists.
-  const ok = await auth.verifyPassword(password, user ? user.password_hash : 'scrypt$16384$AAAAAAAAAAAAAAAAAAAAAA==$AAAA');
-  if (!user || !ok) throw unauthorized('Incorrect email/username or password');
+  const ok = await auth.verifyPassword(password, user ? user.password_hash : DUMMY_HASH);
+  if (!user || !ok) {
+    require('../lib/security').record('login.failed', req, user ? `account u${user.id}` : 'unknown account');
+    throw unauthorized('Incorrect email/username or password');
+  }
+  if (auth.needsRehash(user.password_hash)) q.run('UPDATE users SET password_hash = ? WHERE id = ?', await auth.hashPassword(password), user.id);
   auth.refreshStatus(user);
   const blocked = statusMessage(user);
   if (blocked) throw forbidden(blocked);

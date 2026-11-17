@@ -352,8 +352,8 @@ export async function deleteVideo(video, after) {
 }
 
 // ---------- Search box with suggestions ----------
-export function searchBox({ autofocus = false, initial = '' } = {}) {
-  const input = h('input.search-input', { type: 'search', placeholder: 'Search accounts, videos and #hashtags', value: initial, 'aria-label': 'Search', autocomplete: 'off', maxlength: 100 });
+export function searchBox({ autofocus = false, initial = '', placeholder = 'Search accounts, videos and #hashtags' } = {}) {
+  const input = h('input.search-input', { type: 'search', placeholder, value: initial, 'aria-label': 'Search', autocomplete: 'off', maxlength: 100 });
   const pop = h('div.search-pop.hidden');
   const go = (q) => { pop.classList.add('hidden'); if (q.trim()) navigate(`/search?q=${encodeURIComponent(q.trim())}`); };
   const suggest = debounce(async () => {

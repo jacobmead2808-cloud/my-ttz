@@ -9,6 +9,7 @@ const fs = require('fs');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'clipzy-mod-'));
 process.env.DATA_DIR = path.join(tmp, 'data');
 process.env.UPLOAD_DIR = path.join(tmp, 'uploads');
+process.env.VERIFY_KEY = 'test-verify-key-123';
 
 const { server } = require('../server/index.js');
 const WebSocket = require('ws');
@@ -46,7 +47,7 @@ const id = (name) => q.get('SELECT id FROM users WHERE username = ?', name).id;
 
 test('setup accounts', async () => {
   for (const [c, n] of [[owner, 'owner1'], [admin, 'admin2'], [creator, 'creator'], [fan, 'fan'], [troll, 'troll']]) {
-    const r = await c.post('/api/auth/register', { email: `${n}@t.dev`, username: n, password: 'password1', birthDate: '2000-01-01', acceptTerms: true });
+    const r = await c.post('/api/auth/register', { email: `${n}@t.dev`, username: n, password: 'Test-pass-91', birthDate: '2000-01-01', acceptTerms: true });
     assert.equal(r.status, 201);
   }
   q.run("UPDATE users SET role = 'admin', is_owner = 1 WHERE username = 'owner1'");
@@ -59,11 +60,11 @@ test('setup accounts', async () => {
 });
 
 test('only the owner can verify users and change admin roles', async () => {
-  let r = await admin.post(`/api/admin/users/${id('creator')}/verify`, { key: 'weluvjj' });
+  let r = await admin.post(`/api/admin/users/${id('creator')}/verify`, { key: 'test-verify-key-123' });
   assert.equal(r.status, 403);
   r = await owner.post(`/api/admin/users/${id('creator')}/verify`, { key: 'wrong' });
   assert.equal(r.status, 403, 'verification needs the special key');
-  r = await owner.post(`/api/admin/users/${id('creator')}/verify`, { key: 'weluvjj' });
+  r = await owner.post(`/api/admin/users/${id('creator')}/verify`, { key: 'test-verify-key-123' });
   assert.equal(r.status, 200);
   r = await fan.get('/api/users/creator');
   assert.equal(r.body.user.verified, true);
@@ -199,7 +200,7 @@ test('admin extras: restrict commenting, announcements, platform switches', asyn
   assert.ok(r.body.notifications.some((n) => n.type === 'announcement'));
   r = await owner.patch('/api/admin/platform', { registrationsOpen: false });
   assert.equal(r.body.platform.registrationsOpen, false);
-  r = await client().post('/api/auth/register', { email: 'x@t.dev', username: 'newbie', password: 'password1', birthDate: '2000-01-01', acceptTerms: true });
+  r = await client().post('/api/auth/register', { email: 'x@t.dev', username: 'newbie', password: 'Test-pass-91', birthDate: '2000-01-01', acceptTerms: true });
   assert.equal(r.status, 403);
   await owner.patch('/api/admin/platform', { registrationsOpen: true });
 });

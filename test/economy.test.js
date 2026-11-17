@@ -47,15 +47,42 @@ const spammer = client();
 
 test('setup', async () => {
   for (const [c, n] of [[owner, 'boss'], [host, 'streamer'], [fan, 'fan1'], [spammer, 'spammy']]) {
-    const r = await c.post('/api/auth/register', { email: `${n}@t.dev`, username: n, password: 'password1', birthDate: '2000-01-01', acceptTerms: true });
+    const r = await c.post('/api/auth/register', { email: `${n}@t.dev`, username: n, password: 'Test-pass-91', birthDate: '2000-01-01', acceptTerms: true });
     assert.equal(r.status, 201);
   }
   q.run("UPDATE users SET role = 'admin', is_owner = 1 WHERE username = 'boss'");
 });
 
-test('coins: packages, owner discount, demo purchase, transactions', async () => {
+// ---- Stripe: a local stand-in for Stripe's API (same request/response shape) ----
+const crypto = require('crypto');
+const http = require('http');
+const stripeCalls = [];
+const stripeMock = http.createServer((req, res) => {
+  let body = '';
+  req.on('data', (c) => { body += c; }).on('end', () => {
+    stripeCalls.push({ url: req.url, headers: req.headers, form: new URLSearchParams(body) });
+    const n = stripeCalls.length;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ id: `cs_test_${n}`, url: `https://checkout.stripe.test/c/${n}` }));
+  });
+});
+const WHSEC = 'whsec_test_only';
+const sign = (body, secret = WHSEC) => {
+  const t = Math.floor(Date.now() / 1000);
+  return `t=${t},v1=${crypto.createHmac('sha256', secret).update(`${t}.${body}`).digest('hex')}`;
+};
+const webhook = (event, secret) => {
+  const body = JSON.stringify(event);
+  return fetch(`${base}/api/coins/webhook`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Stripe-Signature': sign(body, secret) }, body });
+};
+const paidEvent = (eventId, sessionId, orderId, amount, currency = 'gbp', pi = `pi_${sessionId}`) => ({
+  id: eventId, type: 'checkout.session.completed',
+  data: { object: { id: sessionId, payment_status: 'paid', amount_total: amount, currency, payment_intent: pi, metadata: { order_id: String(orderId) } } },
+});
+
+test('coins: packages and owner discount; buying is off until Stripe is configured', async () => {
   let r = await fan.get('/api/coins');
-  assert.equal(r.body.paymentMode, 'demo');
+  assert.equal(r.body.paymentMode, 'disabled', 'no demo or test-credit mode exists');
   assert.equal(r.body.wallet.coins, 0);
   const p350 = r.body.packages.find((p) => p.coins === 350);
   assert.equal(p350.priceCents, 339);
@@ -68,10 +95,74 @@ test('coins: packages, owner discount, demo purchase, transactions', async () =>
   assert.equal(r.body.discount.percent, 25);
   await owner.patch('/api/admin/economy', { discountPercent: 0 });
   r = await fan.post('/api/coins/checkout', { coins: 1000 });
-  assert.equal(r.body.demo, true);
-  assert.equal(r.body.wallet.coins, 1000);
+  assert.equal(r.status, 503);
+  assert.equal((await fan.get('/api/coins')).body.wallet.coins, 0, 'nothing credited');
+});
+
+test('Stripe: coins are credited only by a verified webhook with the right amount, once', async () => {
+  await new Promise((res) => stripeMock.listen(0, '127.0.0.1', res));
+  process.env.STRIPE_API_BASE = `http://127.0.0.1:${stripeMock.address().port}`;
+  process.env.STRIPE_SECRET_KEY = 'sk_test_local';
+  process.env.STRIPE_WEBHOOK_SECRET = WHSEC;
+  assert.equal((await fan.get('/api/coins')).body.paymentMode, 'stripe');
+
+  let r = await fan.post('/api/coins/checkout', { coins: 1000 });
+  assert.equal(r.status, 200);
+  assert.match(r.body.url, /^https:\/\/checkout\.stripe\.test\//);
+  const order = r.body.orderId;
+  const call = stripeCalls[stripeCalls.length - 1];
+  assert.equal(call.headers.authorization, 'Bearer sk_test_local');
+  assert.equal(call.headers['idempotency-key'], `clipzy-order-${order}`);
+  assert.equal(call.form.get('line_items[0][price_data][unit_amount]'), '965', 'server-side price, not the client’s');
+  assert.equal(call.form.get('metadata[order_id]'), String(order));
+  assert.equal((await fan.get('/api/coins')).body.wallet.coins, 0, 'returning from checkout credits nothing by itself');
+  assert.equal((await fan.get(`/api/coins/orders/${order}`)).body.order.status, 'pending');
+
+  // forged signature, wrong amount, wrong session id: none credit coins
+  assert.equal((await webhook(paidEvent('evt_forged', 'cs_test_1', order, 965), 'whsec_wrong')).status, 400);
+  await webhook(paidEvent('evt_wrong_session', 'cs_test_999', order, 965));
+  assert.equal((await fan.get('/api/coins')).body.wallet.coins, 0);
+
+  // the real event, delivered three times at once and then again later
+  const ev = paidEvent('evt_paid_1', 'cs_test_1', order, 965);
+  const results = await Promise.all([webhook(ev), webhook(ev), webhook(ev)]);
+  results.forEach((x) => assert.equal(x.status, 200));
+  await webhook({ ...ev, id: 'evt_paid_1_again' });
+  r = await fan.get('/api/coins');
+  assert.equal(r.body.wallet.coins, 1000, 'credited exactly once');
+  assert.equal((await fan.get(`/api/coins/orders/${order}`)).body.order.status, 'paid');
   r = await fan.get('/api/coins/transactions');
   assert.equal(r.body.transactions[0].type, 'purchase');
+  assert.equal(r.body.transactions[0].coins, 1000);
+
+  // an order whose charged amount doesn't match is never credited
+  r = await fan.post('/api/coins/checkout', { coins: 100 });
+  await webhook(paidEvent('evt_tampered', `cs_test_${stripeCalls.length}`, r.body.orderId, 1));
+  assert.equal((await fan.get(`/api/coins/orders/${r.body.orderId}`)).body.order.status, 'failed');
+  assert.equal((await fan.get('/api/coins')).body.wallet.coins, 1000);
+
+  // cancelling at Stripe, and an expired checkout
+  r = await fan.post('/api/coins/checkout', { coins: 100 });
+  await fan.post(`/api/coins/orders/${r.body.orderId}/cancel`);
+  assert.equal((await fan.get(`/api/coins/orders/${r.body.orderId}`)).body.order.status, 'cancelled');
+  r = await fan.post('/api/coins/checkout', { coins: 100 });
+  await webhook({ id: 'evt_exp', type: 'checkout.session.expired', data: { object: { id: `cs_test_${stripeCalls.length}`, metadata: { order_id: String(r.body.orderId) } } } });
+  assert.equal((await fan.get(`/api/coins/orders/${r.body.orderId}`)).body.order.status, 'expired');
+});
+
+test('Stripe: a refund takes the coins back (never below zero)', async () => {
+  let r = await fan.post('/api/coins/checkout', { coins: 100 });
+  const orderId = r.body.orderId;
+  const sid = `cs_test_${stripeCalls.length}`;
+  await webhook(paidEvent('evt_paid_refundable', sid, orderId, 99, 'gbp', 'pi_refund_me'));
+  assert.equal((await fan.get('/api/coins')).body.wallet.coins, 1100);
+  await webhook({ id: 'evt_refund', type: 'charge.refunded', data: { object: { id: 'ch_1', payment_intent: 'pi_refund_me', refunded: true } } });
+  await webhook({ id: 'evt_refund_dup', type: 'charge.refunded', data: { object: { id: 'ch_1', payment_intent: 'pi_refund_me', refunded: true } } });
+  assert.equal((await fan.get('/api/coins')).body.wallet.coins, 1000, 'refunded once');
+  assert.equal((await fan.get(`/api/coins/orders/${orderId}`)).body.order.status, 'refunded');
+  const tx = (await fan.get('/api/coins/transactions')).body.transactions[0];
+  assert.equal(tx.type, 'refunded');
+  assert.equal(tx.coins, -100);
 });
 
 test('LIVE eligibility: blocked without followers/verification/standing; trial allowed once', async () => {
@@ -199,22 +290,55 @@ test('watch party: create, join, synced control, chat', async () => {
   a.close(); b.close();
 });
 
-test('Stripe webhook: signature required, retries credit coins exactly once', async () => {
-  const crypto = require('crypto');
-  process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test_only';
-  const uid = id('fan1');
+test('gifts: server prices, strict quantities, retried requests are never charged twice', async () => {
+  const r0 = await fan.post('/api/live', { title: 'nope' });
+  void r0;
+  const { body } = await host.post('/api/live', { title: 'gift test' });
+  const sid = body.stream && body.stream.id;
+  assert.ok(sid, 'stream started');
   const before = (await fan.get('/api/coins')).body.wallet.coins;
-  const order = q.run("INSERT INTO coin_orders (user_id, coins, price_cents, currency, provider, provider_ref, created_at) VALUES (?, 500, 499, 'usd', 'stripe', 'cs_test_1', ?)", uid, Date.now());
-  const payload = JSON.stringify({ type: 'checkout.session.completed', data: { object: { id: 'cs_test_1', payment_status: 'paid', metadata: { order_id: String(order.lastInsertRowid) } } } });
-  const sign = (body, secret = process.env.STRIPE_WEBHOOK_SECRET) => {
-    const t = Math.floor(Date.now() / 1000);
-    return `t=${t},v1=${crypto.createHmac('sha256', secret).update(`${t}.${body}`).digest('hex')}`;
-  };
-  const send = (sig) => fetch(`${base}/api/coins/webhook`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Stripe-Signature': sig }, body: payload });
-  assert.equal((await send(sign(payload, 'whsec_wrong'))).status, 400);
-  assert.equal((await fan.get('/api/coins')).body.wallet.coins, before, 'forged webhook credits nothing');
-  const results = await Promise.all([send(sign(payload)), send(sign(payload)), send(sign(payload))]);
-  results.forEach((r) => assert.equal(r.status, 200));
-  assert.equal((await fan.get('/api/coins')).body.wallet.coins, before + 500, 'credited exactly once');
-  delete process.env.STRIPE_WEBHOOK_SECRET;
+  for (const count of [0, -5, 100, 2.5, 'x']) {
+    const r = await fan.post(`/api/live/${sid}/gift`, { giftId: 'rose', count });
+    assert.equal(r.status, 400, `count ${count} rejected`);
+  }
+  let r = await fan.post(`/api/live/${sid}/gift`, { giftId: 'rose', count: 1, coins: 0, price: 0 });
+  assert.equal(r.body.sent.coins, 1, 'client-sent price is ignored');
+  const ref = 'retry-test-0001';
+  const a = await fan.post(`/api/live/${sid}/gift`, { giftId: 'donut', count: 2, clientRef: ref });
+  const b = await fan.post(`/api/live/${sid}/gift`, { giftId: 'donut', count: 2, clientRef: ref });
+  assert.equal(a.status, 200); assert.equal(b.status, 200);
+  assert.equal((await fan.get('/api/coins')).body.wallet.coins, before - 1 - 60, 'same request id charged once');
+  r = await fan.post(`/api/live/${sid}/gift`, { giftId: 'galaxy', count: 99 });
+  assert.equal(r.status, 400, 'not enough coins');
+  assert.equal((await fan.get('/api/coins')).body.wallet.coins, before - 61, 'balance unchanged after a failed gift');
+  await host.post(`/api/live/${sid}/end`);
+  stripeMock.close();
+  for (const k of ['STRIPE_API_BASE', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET']) delete process.env[k];
+});
+
+test('gift catalogue: original artwork exists, tiers match prices, displayed price is what is charged', async () => {
+  const eco = require('../server/lib/economy');
+  const ids = new Set();
+  for (const g of eco.GIFTS) {
+    assert.ok(!ids.has(g.id), `duplicate id ${g.id}`); ids.add(g.id);
+    assert.ok(fs.existsSync(path.join(__dirname, '..', 'public', g.art)), `artwork for ${g.id}`);
+    assert.ok(Number.isInteger(g.coins) && g.coins > 0);
+    assert.equal(g.tier, g.coins <= 10 ? 1 : g.coins <= 199 ? 2 : g.coins <= 999 ? 3 : g.coins <= 4999 ? 4 : 5);
+    assert.ok(['float', 'pop', 'burst', 'takeover', 'legendary'].includes(g.effect));
+  }
+  const shown = (await fan.get('/api/coins')).body.gifts;
+  const host2 = client();
+  await host2.post('/api/auth/register', { email: 'host2@t.dev', username: 'host2', password: 'Test-pass-91', birthDate: '1990-01-01', acceptTerms: true });
+  q.run("UPDATE users SET is_verified = 1 WHERE username = 'host2'");
+  const s = (await host2.post('/api/live', { title: 'price check' })).body.stream;
+  const uid = id('fan1');
+  q.run('UPDATE wallets SET coins = 50000 WHERE user_id = ?', uid);
+  for (const g of shown.filter((x) => [1, 2, 3, 4].includes(x.tier)).slice(0, 6)) {
+    const before = (await fan.get('/api/coins')).body.wallet.coins;
+    const r = await fan.post(`/api/live/${s.id}/gift`, { giftId: g.id, count: 2 });
+    assert.equal(r.status, 200, g.id);
+    assert.equal(r.body.sent.coins, g.coins * 2);
+    assert.equal((await fan.get('/api/coins')).body.wallet.coins, before - g.coins * 2, `charged exactly the shown price for ${g.id}`);
+  }
+  await host2.post(`/api/live/${s.id}/end`);
 });

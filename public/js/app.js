@@ -85,7 +85,7 @@ function renderSidebar() {
   const me = store.me;
   sidebar.append(
     h('a.brand', { href: '/', 'aria-label': `${BRAND.name} home` }, h('img', { src: BRAND.logo, alt: '', width: 34, height: 34 }), h('span.brand-name', BRAND.name)),
-    h('div.side-search', searchBox()),
+    h('div.side-search', searchBox({ placeholder: 'Search' })),
     h('div.side-links',
       navLinks().map((l) => h('a.side-link', { href: l.href, dataset: { key: l.key } },
         h('span.side-icon', l.avatar ? avatar(me, 30, { link: false }) : icon(l.ic, { size: 26 }), l.badge ? badge(l.badge) : null), h('span.side-label', l.label))),

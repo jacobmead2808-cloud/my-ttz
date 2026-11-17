@@ -23,7 +23,11 @@ function createLimiter({ windowMs, max }) {
 /** Express middleware factory. keyFn(req) decides the bucket. */
 function limit({ windowMs, max, key = (req) => req.ip, message }) {
   const check = createLimiter({ windowMs, max });
-  return (req, _res, next) => (check(key(req)) ? next() : next(tooMany(message)));
+  return (req, _res, next) => {
+    if (check(key(req))) return next();
+    require('./security').record('ratelimit.hit', req, message || null, { severity: 'info' });
+    return next(tooMany(message));
+  };
 }
 
 module.exports = { createLimiter, limit };

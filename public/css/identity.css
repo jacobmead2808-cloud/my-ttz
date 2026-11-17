@@ -149,7 +149,7 @@ body[data-shell="feed"] .feed-item { padding-top: 60px; padding-bottom: 16px; }
 .recharge-head { display: flex; justify-content: space-between; align-items: center; }
 .recharge-head h3 { font-size: 20px; }
 .recharge-sale { background: rgba(239, 68, 68, .1); color: var(--live-red); font-weight: 700; padding: 8px 12px; border-radius: 10px; font-size: 14px; }
-.recharge-demo { display: flex; align-items: center; gap: 6px; background: var(--surface); color: var(--text-2); padding: 8px 12px; border-radius: 10px; font-size: 13px; font-weight: 600; }
+.recharge-note { display: flex; align-items: center; gap: 6px; background: var(--surface); color: var(--text-2); padding: 8px 12px; border-radius: 10px; font-size: 13px; font-weight: 600; }
 .pkg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .pkg { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 16px 8px; border-radius: 12px; border: 1.5px solid transparent; background: var(--surface); cursor: pointer; color: var(--text); }
 .pkg:hover { background: var(--surface-hover); }
@@ -403,7 +403,7 @@ body[data-shell="party"] .view { overflow: hidden; }
 .story-add { background: var(--brand); }
 .editor-tab.active { background: var(--text); color: var(--bg); }
 .coll-chip.active { background: var(--text); color: var(--bg); }
-.context-banner, .recharge-demo { border: 0; }
+.context-banner, .recharge-note { border: 0; }
 .filter-swatch { background: var(--surface-2); }
 .empty-state .icon { color: var(--muted); }
 .auth-hero { background: var(--surface); }

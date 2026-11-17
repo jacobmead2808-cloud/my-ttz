@@ -1,7 +1,7 @@
 // Service worker: makes Clipzy installable, shows an offline screen, and receives push notifications.
 // API calls, media and WebSockets always go to the network (never cached: they're private and live).
-const VERSION = 'clipzy-v3';
-const SHELL = ['/offline.html', '/css/app.css', '/css/theme.css', '/css/features.css', '/css/identity.css', '/js/app.js', '/js/theme-init.js',
+const VERSION = 'clipzy-v5';
+const SHELL = ['/offline.html', '/css/app.css', '/css/theme.css', '/css/features.css', '/css/identity.css', '/css/design.css', '/css/live.css', '/fonts/inter-var.woff2', '/js/app.js', '/js/theme-init.js',
   '/assets/brand/logo.svg', '/assets/brand/icon-192.png', '/manifest.webmanifest', '/js/offline.js'];
 
 self.addEventListener('install', (e) => {

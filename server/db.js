@@ -463,6 +463,32 @@ const q = {
   run: (sql, ...p) => stmt(sql).run(...p),
 };
 
+// Payments: Stripe payment reference, failure/refund details, and processed webhook events.
+ensureColumn('coin_orders', 'payment_intent', 'TEXT');
+ensureColumn('coin_orders', 'failure_reason', 'TEXT');
+ensureColumn('coin_orders', 'refunded_at', 'INTEGER');
+db.exec('CREATE INDEX IF NOT EXISTS idx_coin_orders_pi ON coin_orders(payment_intent)');
+db.exec(`CREATE TABLE IF NOT EXISTS stripe_events (
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+)`);
+// Gifts: a per-request id from the sender's device so a retried request is never charged twice.
+ensureColumn('gift_events', 'client_ref', 'TEXT');
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_gift_client_ref ON gift_events(sender_id, client_ref) WHERE client_ref IS NOT NULL');
+
+db.exec(`CREATE TABLE IF NOT EXISTS security_events (
+  id INTEGER PRIMARY KEY,
+  type TEXT NOT NULL,
+  severity TEXT NOT NULL DEFAULT 'warn',
+  user_id INTEGER,
+  ip_key TEXT,
+  path TEXT,
+  detail TEXT,
+  created_at INTEGER NOT NULL
+)`);
+db.exec('CREATE INDEX IF NOT EXISTS idx_security_events_time ON security_events(created_at)');
+
 let depth = 0;
 /** Run fn inside a transaction (nested calls join the outer one). */
 function tx(fn) {

@@ -158,7 +158,10 @@ app.get(/^\/(?!api\/|media\/|ws$).*/, (req, res) => {
 app.use((err, req, res, _next) => {
   let status = 500;
   let message = 'Something went wrong. Please try again.';
-  if (err instanceof HttpError) { status = err.status; message = err.message; }
+  if (err instanceof HttpError) {
+    status = err.status; message = err.message;
+    if (status === 403 && req.originalUrl.startsWith('/api/admin')) require('./lib/security').record('access.denied', req, message);
+  }
   else if (err instanceof multer.MulterError) {
     status = err.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
     message = err.code === 'LIMIT_FILE_SIZE' ? `File is too large (max ${Math.round(config.maxVideoBytes / 1048576)} MB for videos, 8 MB for images)` : err.message;
@@ -166,6 +169,7 @@ app.use((err, req, res, _next) => {
   else if (err.type === 'entity.parse.failed') { status = 400; message = 'Invalid JSON body'; }
   else if (err.type === 'entity.too.large') { status = 413; message = 'Request is too large'; }
   else if (err.status === 404) { status = 404; message = 'Not found'; }
+  else if (err.status === 400 || err.status === 403) { status = err.status; message = status === 403 ? 'Forbidden' : 'Bad request'; }
   else console.error('[error]', req.method, req.originalUrl, err);
   if (res.headersSent) return;
   if (req.originalUrl.startsWith('/api/')) res.status(status).json({ error: message, ...(err.extra || {}) });
@@ -176,6 +180,7 @@ app.use((err, req, res, _next) => {
 liveRt.cleanupStale();
 require('./lib/publish').startScheduler();
 require('./lib/aiMod').startGuardian();
+require('./lib/retention').startRetention();
 if (config.isProd || process.env.BACKUPS === 'true') require('./lib/backup').startBackups();
 for (const f of fs.readdirSync(config.dirs.tmp)) fs.rm(path.join(config.dirs.tmp, f), { force: true }, () => {});
 const server = http.createServer(app);

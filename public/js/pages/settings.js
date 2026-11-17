@@ -60,6 +60,8 @@ export default function settingsPage(ctx) {
             try { const r = await api.post('/me/email', { email: email.value, password: pw.value }); setMe(r.user); pw.value = ''; toast('Email updated', { type: 'success' }); } catch (err) { toastError(err); }
           },
         }, field('Email', email), field('Confirm with password', pw), h('div', h('button.btn.btn-primary', { type: 'submit' }, 'Update email')))),
+        card('Your data', h('p.muted', 'Download a copy of the information Clipzy holds about you: profile, videos, comments, messages you sent, follows, coins and gifts.'),
+          h('div', h('a.btn.btn-secondary', { href: '/api/me/export', download: '' }, icon('upload', { size: 16 }), ' Download my data'))),
         card('Delete account', h('p.muted', 'Permanently delete your account, videos, comments, likes and messages. This cannot be undone.'),
           h('button.btn.btn-danger', { onclick: deleteAccount }, icon('trash', { size: 16 }), ' Delete account')));
     } else if (k === 'privacy') {

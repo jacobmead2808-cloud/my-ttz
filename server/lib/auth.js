@@ -6,25 +6,41 @@ const { q, now } = require('../db');
 const { unauthorized, forbidden } = require('./errors');
 
 const scrypt = promisify(crypto.scrypt);
-const SCRYPT = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
+// OWASP password storage guidance: scrypt with N=2^15, r=8, p=3 (≈32 MB per hash).
+const SCRYPT = { N: 32768, r: 8, p: 3, maxmem: 96 * 1024 * 1024 };
 const COOKIE = 'sid';
 
 async function hashPassword(pw) {
   const salt = crypto.randomBytes(16);
   const hash = await scrypt(pw, salt, 64, SCRYPT);
-  return `scrypt$${SCRYPT.N}$${salt.toString('base64')}$${hash.toString('base64')}`;
+  return `scrypt$${SCRYPT.N}$${SCRYPT.r}$${SCRYPT.p}$${salt.toString('base64')}$${hash.toString('base64')}`;
+}
+
+/** Parses "scrypt$N$r$p$salt$hash" (current) and "scrypt$N$salt$hash" (older, r=8 p=1). */
+function parseHash(stored) {
+  const parts = String(stored).split('$');
+  if (parts[0] !== 'scrypt') return null;
+  if (parts.length === 6) return { N: Number(parts[1]), r: Number(parts[2]), p: Number(parts[3]), salt: parts[4], hash: parts[5] };
+  if (parts.length === 4) return { N: Number(parts[1]), r: 8, p: 1, salt: parts[2], hash: parts[3] };
+  return null;
 }
 
 async function verifyPassword(pw, stored) {
   try {
-    const [algo, n, saltB64, hashB64] = String(stored).split('$');
-    if (algo !== 'scrypt') return false;
-    const expected = Buffer.from(hashB64, 'base64');
-    const actual = await scrypt(pw, Buffer.from(saltB64, 'base64'), expected.length, { ...SCRYPT, N: Number(n) });
-    return crypto.timingSafeEqual(actual, expected);
+    const h = parseHash(stored);
+    if (!h || !h.N || h.N > 1 << 20 || h.r > 32 || h.p > 16) return false;
+    const expected = Buffer.from(h.hash, 'base64');
+    const actual = await scrypt(pw, Buffer.from(h.salt, 'base64'), expected.length, { N: h.N, r: h.r, p: h.p, maxmem: SCRYPT.maxmem });
+    return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
   } catch {
     return false;
   }
+}
+
+/** True when a stored hash uses weaker settings than today's and should be re-hashed. */
+function needsRehash(stored) {
+  const h = parseHash(stored);
+  return !h || h.N < SCRYPT.N || h.r < SCRYPT.r || h.p < SCRYPT.p;
 }
 
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
@@ -113,11 +129,14 @@ function requireAdmin(req, _res, next) {
  */
 function csrfGuard(req, _res, next) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
-  if (req.get('x-requested-with') !== 'fetch') return next(forbidden('Missing request header'));
+  if (req.get('x-requested-with') !== 'fetch') {
+    require('./security').record('csrf.blocked', req, `${req.method} without the app header`);
+    return next(forbidden('Missing request header'));
+  }
   next();
 }
 
-module.exports = {
+module.exports = { needsRehash,
   hashPassword, verifyPassword, sha256, randomToken, createSession, destroySession,
   userFromRequest, loadUser, requireAuth, requireAdmin, csrfGuard, refreshStatus,
 };

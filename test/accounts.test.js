@@ -47,21 +47,21 @@ const yearsAgo = (n) => { const d = new Date(); d.setUTCFullYear(d.getUTCFullYea
 
 test('sign-up requires a real date of birth, minimum age and accepted terms', async () => {
   const c = client();
-  let r = await c.post('/api/auth/register', { email: 'a@t.dev', username: 'nodob', password: 'password1', acceptTerms: true });
+  let r = await c.post('/api/auth/register', { email: 'a@t.dev', username: 'nodob', password: 'Test-pass-91', acceptTerms: true });
   assert.equal(r.status, 400);
-  r = await c.post('/api/auth/register', { email: 'a@t.dev', username: 'baddob', password: 'password1', birthDate: '2001-02-30', acceptTerms: true });
+  r = await c.post('/api/auth/register', { email: 'a@t.dev', username: 'baddob', password: 'Test-pass-91', birthDate: '2001-02-30', acceptTerms: true });
   assert.equal(r.status, 400);
-  r = await c.post('/api/auth/register', { email: 'a@t.dev', username: 'kiddo', password: 'password1', birthDate: yearsAgo(12), acceptTerms: true });
+  r = await c.post('/api/auth/register', { email: 'a@t.dev', username: 'kiddo', password: 'Test-pass-91', birthDate: yearsAgo(12), acceptTerms: true });
   assert.equal(r.status, 400);
   assert.match(r.body.error, /13/);
-  r = await c.post('/api/auth/register', { email: 'a@t.dev', username: 'noterms', password: 'password1', birthDate: '2000-01-01' });
+  r = await c.post('/api/auth/register', { email: 'a@t.dev', username: 'noterms', password: 'Test-pass-91', birthDate: '2000-01-01' });
   assert.equal(r.status, 400);
   assert.match(r.body.error, /Terms/);
 });
 
 test('unverified accounts can browse but not post until the email link is used', async () => {
   const c = client();
-  let r = await c.post('/api/auth/register', { email: 'adult@t.dev', username: 'adult', password: 'password1', birthDate: '1995-05-05', acceptTerms: true });
+  let r = await c.post('/api/auth/register', { email: 'adult@t.dev', username: 'adult', password: 'Test-pass-91', birthDate: '1995-05-05', acceptTerms: true });
   assert.equal(r.status, 201);
   assert.equal(r.body.user.emailVerified, false);
   assert.equal(r.body.user.isAdult, true);
@@ -87,7 +87,7 @@ test('unverified accounts can browse but not post until the email link is used',
   assert.equal(r.status, 400, 'links are single-use');
 
   // Changing email requires verifying the new address.
-  r = await c.post('/api/me/email', { email: 'adult2@t.dev', password: 'password1' });
+  r = await c.post('/api/me/email', { email: 'adult2@t.dev', password: 'Test-pass-91' });
   assert.equal(r.status, 200);
   assert.equal(r.body.user.emailVerified, false);
   r = await client().post('/api/auth/verify-email', { token: latestToken('adult2@t.dev') });
@@ -96,7 +96,7 @@ test('unverified accounts can browse but not post until the email link is used',
 
 test('teens start private, DMs limited to friends, no LIVE, coins or gifts', async () => {
   const c = client();
-  let r = await c.post('/api/auth/register', { email: 'teen@t.dev', username: 'teen', password: 'password1', birthDate: yearsAgo(15), acceptTerms: true });
+  let r = await c.post('/api/auth/register', { email: 'teen@t.dev', username: 'teen', password: 'Test-pass-91', birthDate: yearsAgo(15), acceptTerms: true });
   assert.equal(r.status, 201);
   assert.equal(r.body.user.isAdult, false);
   r = await client().post('/api/auth/verify-email', { token: latestToken('teen@t.dev') });
@@ -120,12 +120,12 @@ test('teens start private, DMs limited to friends, no LIVE, coins or gifts', asy
 
 test('usernames and display names can never reveal an email address', async () => {
   const c = client();
-  let r = await c.post('/api/auth/register', { email: 'jane.doe92@gmail.com', username: 'jane.doe92gmail.com', password: 'password1', birthDate: '1990-01-01', acceptTerms: true });
+  let r = await c.post('/api/auth/register', { email: 'jane.doe92@gmail.com', username: 'jane.doe92gmail.com', password: 'Test-pass-91', birthDate: '1990-01-01', acceptTerms: true });
   assert.equal(r.status, 400);
   assert.match(r.body.error, /email/);
-  r = await c.post('/api/auth/register', { email: 'jane.doe92@gmail.com', username: 'janed', displayName: 'jane.doe92@gmail.com', password: 'password1', birthDate: '1990-01-01', acceptTerms: true });
+  r = await c.post('/api/auth/register', { email: 'jane.doe92@gmail.com', username: 'janed', displayName: 'jane.doe92@gmail.com', password: 'Test-pass-91', birthDate: '1990-01-01', acceptTerms: true });
   assert.equal(r.status, 400);
-  r = await c.post('/api/auth/register', { email: 'jane.doe92@gmail.com', username: 'janed', password: 'password1', birthDate: '1990-01-01', acceptTerms: true });
+  r = await c.post('/api/auth/register', { email: 'jane.doe92@gmail.com', username: 'janed', password: 'Test-pass-91', birthDate: '1990-01-01', acceptTerms: true });
   assert.equal(r.status, 201);
   r = await c.patch('/api/me', { username: 'janedoe92gmail' });
   assert.equal(r.status, 400);

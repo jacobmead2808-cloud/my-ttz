@@ -52,21 +52,21 @@ const admin = client();
 let videoId;
 
 test('registration validates input and creates sessions', async () => {
-  let r = await alice.post('/api/auth/register', { email: 'bad', username: 'alice', password: 'password1', birthDate: '2000-01-01', acceptTerms: true });
+  let r = await alice.post('/api/auth/register', { email: 'bad', username: 'alice', password: 'Test-pass-91', birthDate: '2000-01-01', acceptTerms: true });
   assert.equal(r.status, 400);
   r = await alice.post('/api/auth/register', { email: 'alice@test.dev', username: 'alice', password: 'short', birthDate: '2000-01-01', acceptTerms: true });
   assert.equal(r.status, 400);
-  r = await alice.post('/api/auth/register', { email: 'alice@test.dev', username: 'alice', password: 'password1', displayName: 'Alice', birthDate: '2000-01-01', acceptTerms: true });
+  r = await alice.post('/api/auth/register', { email: 'alice@test.dev', username: 'alice', password: 'Test-pass-91', displayName: 'Alice', birthDate: '2000-01-01', acceptTerms: true });
   assert.equal(r.status, 201);
   assert.equal(r.body.user.username, 'alice');
   assert.ok(!('password_hash' in r.body.user));
-  r = await bob.post('/api/auth/register', { email: 'ALICE@test.dev', username: 'bob', password: 'password1', birthDate: '2000-01-01', acceptTerms: true });
+  r = await bob.post('/api/auth/register', { email: 'ALICE@test.dev', username: 'bob', password: 'Test-pass-91', birthDate: '2000-01-01', acceptTerms: true });
   assert.equal(r.status, 409, 'duplicate email (case-insensitive)');
-  r = await bob.post('/api/auth/register', { email: 'bob@test.dev', username: 'bob', password: 'password1', birthDate: '2000-01-01', acceptTerms: true });
+  r = await bob.post('/api/auth/register', { email: 'bob@test.dev', username: 'bob', password: 'Test-pass-91', birthDate: '2000-01-01', acceptTerms: true });
   assert.equal(r.status, 201);
-  r = await carol.post('/api/auth/register', { email: 'carol@test.dev', username: 'carol', password: 'password1', birthDate: '2000-01-01', acceptTerms: true });
+  r = await carol.post('/api/auth/register', { email: 'carol@test.dev', username: 'carol', password: 'Test-pass-91', birthDate: '2000-01-01', acceptTerms: true });
   assert.equal(r.status, 201);
-  r = await admin.post('/api/auth/register', { email: 'root@test.dev', username: 'boss', password: 'password1', birthDate: '2000-01-01', acceptTerms: true });
+  r = await admin.post('/api/auth/register', { email: 'root@test.dev', username: 'boss', password: 'Test-pass-91', birthDate: '2000-01-01', acceptTerms: true });
   q.run("UPDATE users SET role = 'admin' WHERE username = 'boss'");
   const me = await alice.get('/api/auth/me');
   assert.equal(me.body.user.email, 'alice@test.dev');
@@ -78,7 +78,7 @@ test('passwords are hashed, login/logout work, CSRF header required', async () =
   const c = client();
   let r = await c.post('/api/auth/login', { login: 'alice', password: 'wrong-pass1' });
   assert.equal(r.status, 401);
-  r = await c.post('/api/auth/login', { login: 'ALICE@test.dev', password: 'password1' });
+  r = await c.post('/api/auth/login', { login: 'ALICE@test.dev', password: 'Test-pass-91' });
   assert.equal(r.status, 200);
   r = await fetch(base + '/api/auth/logout', { method: 'POST', headers: { Cookie: c.cookie } });
   assert.equal(r.status, 403, 'missing CSRF header is rejected');
