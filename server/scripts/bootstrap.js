@@ -21,8 +21,18 @@ async function main() {
     return;
   }
   const pw = process.env.ADMIN_PASSWORD || '';
-  if (config.isProd && (!pw || pw === 'ChangeMe-Admin1!' || pw.length < 10)) {
-    console.error('[bootstrap] Set a strong ADMIN_PASSWORD (10+ characters, not the example one) before the first start.');
+  if (config.isProd && !pw) {
+    // No owner yet and no password provided: print a one-time link (only visible in the server console)
+    // that lets the site owner create the owner account in the browser.
+    const token = require('../lib/ownerSetup').issue();
+    console.log('');
+    console.log('[setup] No owner account yet. Open this link to create it (valid 24 hours, works once):');
+    console.log(`[setup] ${config.baseUrl}/setup?token=${token}`);
+    console.log('');
+    return;
+  }
+  if (config.isProd && (pw === 'ChangeMe-Admin1!' || pw.length < 10)) {
+    console.error('[bootstrap] ADMIN_PASSWORD must be 10+ characters and not the example one. Remove it to use the setup link instead.');
     process.exit(1);
   }
   if (config.isProd && (!process.env.ADMIN_EMAIL || /@(example\.com|clipzy\.local)$/i.test(process.env.ADMIN_EMAIL))) {

@@ -1,7 +1,7 @@
 'use strict';
 const express = require('express');
 const config = require('../config');
-const { q, now } = require('../db');
+const { q, now, tx } = require('../db');
 const v = require('../lib/validate');
 const { bad, unauthorized, forbidden, conflict } = require('../lib/errors');
 const auth = require('../lib/auth');
@@ -89,6 +89,35 @@ router.post('/resend-verification', auth.requireAuth, resendLimit, async (req, r
   if (req.user.email_verified) return res.json({ ok: true, alreadyVerified: true });
   const r = await accounts.sendVerification(req.user);
   res.json({ ok: true, delivered: !!r.delivered, devNote: !config.isProd && !r.delivered ? 'Dev mode: the link is in the server console and data/outbox/.' : null });
+});
+
+const setupLimit = limit({ windowMs: 15 * 60 * 1000, max: 10, key: (req) => `setup:${req.ip}`, message: 'Too many attempts. Try again later.' });
+router.get('/setup', setupLimit, (req, res) => {
+  res.json({ needed: !require('../lib/ownerSetup').hasUsers(), valid: require('../lib/ownerSetup').valid(String(req.query.token || '')) });
+});
+router.post('/setup', setupLimit, async (req, res) => {
+  const setup = require('../lib/ownerSetup');
+  if (!setup.valid(String(req.body.token || ''))) {
+    require('../lib/security').record('setup.denied', req, 'invalid or used owner setup link');
+    throw unauthorized('This setup link is invalid, expired or already used. Restart the server to get a new one.');
+  }
+  const email = v.email(req.body.email);
+  const username = v.username(req.body.username);
+  const password = v.password(req.body.password);
+  v.assertNoEmail(username, email, 'Username');
+  const birthDate = accounts.parseBirthDate(req.body.birthDate);
+  if (accounts.ageOn(birthDate) < accounts.ADULT_AGE) throw bad('The owner account must belong to an adult.');
+  const hash = await auth.hashPassword(password);
+  const id = tx(() => {
+    if (!setup.valid(String(req.body.token || ''))) throw unauthorized('This setup link was just used.');
+    const r = q.run(`INSERT INTO users (username, email, password_hash, display_name, role, is_owner, is_verified, email_verified, birth_date, terms_accepted_at, created_at)
+      VALUES (?, ?, ?, ?, 'admin', 1, 1, 1, ?, ?, ?)`, username, email, hash, v.str(req.body.displayName, { name: 'Display name', max: 40 }) || username, birthDate, now(), now());
+    setup.consume();
+    return Number(r.lastInsertRowid);
+  });
+  auth.createSession(res, id, req.get('user-agent'));
+  console.log(`[setup] owner account @${username} created`);
+  res.status(201).json({ user: meJson(q.get('SELECT * FROM users WHERE id = ?', id)) });
 });
 
 router.post('/logout', (req, res) => {

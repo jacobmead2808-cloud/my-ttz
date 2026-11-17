@@ -130,6 +130,35 @@ export default function authPage(ctx) {
     return { title: 'Reset password', el: shell('Reset password', "Enter your account's email and we'll send you a link to reset your password.", form, [h('a.link', { href: '/login' }, 'Back to log in')]) };
   }
 
+  if (ctx.mode === 'setup') {
+    const token = ctx.query.get('token') || '';
+    const err = errorBox();
+    const email = input('email', 'email', 'Your email (private)', { autocomplete: 'email', maxlength: 254 });
+    const username = input('username', 'text', 'Username (public)', { autocomplete: 'off', autocapitalize: 'none', minlength: 2, maxlength: 24 });
+    username.addEventListener('input', () => { username.value = username.value.toLowerCase().replace(/[^a-z0-9_.]/g, ''); });
+    const display = input('displayName', 'text', 'Display name (optional)', { required: false, maxlength: 40 });
+    const pw = pwInput('password', 'Password (8+ characters, letters and numbers)', 'new-password');
+    const dob = h('input.input', { name: 'birthDate', type: 'date', required: true, max: new Date().toISOString().slice(0, 10), min: '1900-01-01', 'aria-label': 'Date of birth' });
+    const btn = h('button.btn.btn-primary.btn-block.btn-lg', { type: 'submit' }, 'Create owner account');
+    const form = h('form.stack', {
+      onsubmit: async (e) => {
+        e.preventDefault();
+        showErr(err, '');
+        btn.disabled = true;
+        try {
+          const r = await api.post('/auth/setup', { token, email: email.value, username: username.value, displayName: display.value, password: pw.input.value, birthDate: dob.value });
+          toast('Owner account created. Welcome!', { type: 'success' });
+          afterLogin(r.user, '/');
+        } catch (ex) { showErr(err, ex.message); btn.disabled = false; }
+      },
+    }, err, email, username, display, pw, h('label.field-inline', h('span.small.muted', 'Date of birth (not shown publicly)'), dob), btn);
+    api.get(`/auth/setup?token=${encodeURIComponent(token)}`).then((r) => {
+      if (!r.needed) showErr(err, 'This site already has an owner. Log in instead.');
+      else if (!r.valid) showErr(err, 'This setup link is invalid or expired. Restart the server to get a new link in its console.');
+    }).catch(() => {});
+    return { title: 'Set up Clipzy', el: shell('Set up your site', 'Create the owner account. This link works once.', form, [h('a.link', { href: '/login' }, 'Already set up? Log in')]) };
+  }
+
   if (ctx.mode === 'verify') {
     const token = ctx.query.get('token') || '';
     const status = h('div.stack', h('p.muted', 'Confirming your email...'));

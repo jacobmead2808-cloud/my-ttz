@@ -41,6 +41,7 @@ route('/signup', page('auth'), { guest: true, shell: 'bare', mode: 'signup' });
 route('/forgot', page('auth'), { shell: 'bare', mode: 'forgot' });
 route('/reset', page('auth'), { shell: 'bare', mode: 'reset' });
 route('/verify-email', page('auth'), { shell: 'bare', mode: 'verify' });
+route('/setup', page('auth'), { shell: 'bare', mode: 'setup' });
 route('/terms', page('legal'), { mode: 'terms' });
 route('/privacy', page('legal'), { mode: 'privacy' });
 route('/guidelines', page('legal'), { mode: 'guidelines' });
