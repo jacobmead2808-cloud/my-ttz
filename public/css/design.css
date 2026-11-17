@@ -306,3 +306,9 @@ body[data-shell="bare"] .app-shell { grid-template-rows: 0 1fr; }
 .settings-card { display: flex; flex-direction: column; gap: var(--sp-3); }
 .settings-card > h2 { margin: 0; }
 .settings-card > h2 + p, .settings-card > h2 + .muted { margin: 0; }
+/* Phones: the feed header is white text, so an empty or loading feed keeps the dark stage behind it */
+@media (max-width: 720px) {
+  body[data-shell="feed"] .feed-status-full, body[data-shell="feed"] .feed .empty-state { background: #000; color: #fff; }
+  body[data-shell="feed"] .feed-status-full .muted, body[data-shell="feed"] .feed .empty-state p { color: rgba(255, 255, 255, .72); }
+  body[data-shell="feed"] .feed .empty-state h3, body[data-shell="feed"] .feed .empty-state b { color: #fff; }
+}
